@@ -1,4 +1,4 @@
-from timezone_setup import SUPPORTED_TIMEZONES
+from timezone_setup import normalize_timezone
 
 
 def check_scheduling_info(info):
@@ -12,6 +12,7 @@ def check_scheduling_info(info):
             return False, "What should I call this event?"
 
         if not info.get("date"):
+            
             return False, "What date should I schedule this event for?"
 
         if not info.get("time"):
@@ -20,10 +21,12 @@ def check_scheduling_info(info):
         if not info.get("timezone"):
             return False, "Which timezone should I use?"
 
-        if info.get("timezone") not in SUPPORTED_TIMEZONES:
-            return False, f"I do not support the timezone '{info.get('timezone')}'. Please use other supported timezones."
+        normalized_timezone = normalize_timezone(info.get("timezone"))
 
-        info["resolved_timezone"] = SUPPORTED_TIMEZONES[info.get("timezone")]
+        if not normalized_timezone:
+             return False, f"I do not support the timezone '{info.get('timezone')}'. Please use a supported timezone."
+
+        info["timezone"] = normalized_timezone
 
         if not info.get("duration_minutes"):
             info["duration_minutes"] = 30

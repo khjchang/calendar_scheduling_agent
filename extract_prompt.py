@@ -2,9 +2,10 @@ import os
 import json
 from dotenv import load_dotenv
 from google import genai
-
+from google_calendar_service import check_calendar_conflict, create_event_from_info, print_conflicts
 from validation import check_scheduling_info
 from timezone_setup import has_ambiguous_time
+from manage_date import fix_year_if_missing
 
 load_dotenv()
 
@@ -133,6 +134,7 @@ if __name__ == "__main__":
         prompt = prompt + " " + am_pm_answer
 
     result = extract_scheduling_info(prompt)
+    result = fix_year_if_missing(prompt, result)
 
     while True:
         check_result = check_scheduling_info(result)
@@ -148,7 +150,16 @@ if __name__ == "__main__":
 
         if is_valid == True:
             print("\nReady to check calendar conflicts.")
-            break
+
+            has_conflict, conflicts = check_calendar_conflict(result)
+            if has_conflict == True:
+                     print_conflicts(conflicts)
+                     print("\nI will not create the new event.")
+            else:
+                    created_event = create_event_from_info(result)
+                    print("\nEvent created successfully.")
+                    print(created_event.get("htmlLink"))
+                    break
 
         user_answer = input("\nYour answer: ")
 
@@ -159,3 +170,4 @@ if __name__ == "__main__":
                 user_answer = user_answer + " " + am_pm_answer
 
         result = update_scheduling_info(result, user_answer, message)
+        result = fix_year_if_missing(user_answer, result)
