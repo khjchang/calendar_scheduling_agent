@@ -52,6 +52,16 @@ def check_scheduling_info(info):
         if not info.get("timezone"):
             return False, "Which timezone should I use for the new time?"
 
-        return False, "I need to check for conflicts and ask for confirmation before rescheduling it."
+        normalized_timezone = normalize_timezone(info.get("timezone"))
+
+        if not normalized_timezone:
+            return False, f"I do not support the timezone '{info.get('timezone')}'. Please use a supported timezone."
+
+        info["timezone"] = normalized_timezone
+
+        if not info.get("duration_minutes"):
+            info["duration_minutes"] = 30
+
+        return True, "Ready to find the matching event before rescheduling."
 
     return False, "I could not process this request."
