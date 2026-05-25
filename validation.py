@@ -37,7 +37,7 @@ def check_scheduling_info(info):
         if not info.get("event_title") and not info.get("date"):
             return False, "Which event do you want to delete?"
 
-        return False, "I need to find the matching event first and ask for your confirmation before deleting it."
+        return True, "I need to find the matching event first and ask for your confirmation before deleting it."
 
     if action == "reschedule":
         if not info.get("event_title"):

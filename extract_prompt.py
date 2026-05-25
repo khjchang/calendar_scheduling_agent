@@ -2,7 +2,7 @@ import os
 import json
 from dotenv import load_dotenv
 from google import genai
-from google_calendar_service import check_calendar_conflict, create_event_from_info, print_conflicts
+from google_calendar_service import check_calendar_conflict, create_event_from_info, print_conflicts,  delete_event_by_id
 from validation import check_scheduling_info
 from timezone_setup import has_ambiguous_time
 from manage_date import fix_year_if_missing
@@ -124,7 +124,6 @@ Required JSON fields:
         print(updated_text)
         return current_info
 
-
 if __name__ == "__main__":
     prompt = input("Enter scheduling request: ")
 
@@ -149,17 +148,145 @@ if __name__ == "__main__":
         print(message)
 
         if is_valid == True:
-            print("\nReady to check calendar conflicts.")
+            action = result.get("action_type")
 
-            has_conflict, conflicts = check_calendar_conflict(result)
-            if has_conflict == True:
-                     print_conflicts(conflicts)
-                     print("\nI will not create the new event.")
-            else:
+            # If there is a conflict, ask whether the user wants to try another time or cancel. ###
+            if action == "create":
+                print("\nReady to check calendar conflicts.")
+
+                has_conflict, conflicts = check_calendar_conflict(result)
+
+                if has_conflict == True:
+                    print_conflicts(conflicts)
+
+                    user_answer = input(
+                        "\nThis time is not available. Enter another date/time, type delete conflict, or type cancel: "
+                    )
+
+                    user_answer_lower = user_answer.lower().strip()
+
+                    # cancel event that I try to create
+                    if user_answer_lower == "cancel":
+                        print("\nCancelled. I will not create the new event.")
+                        break
+
+                    if "delete" in user_answer_lower:
+                        if len(conflicts) == 1:
+                            conflict_event = conflicts[0]
+                        else:
+                            print("\nMultiple conflicting events found:")
+                            for index, event in enumerate(conflicts):
+                                title = event.get("summary", "No Title")
+                                start = event["start"].get("dateTime", event["start"].get("date"))
+                                print(f"{index + 1}. {title} at {start}")
+
+                            choice = input("Which conflicting event should I delete? Enter the number: ")
+
+                            try:
+                                choice_number = int(choice)
+                            except ValueError:
+                                print("Invalid choice. I will not delete anything.")
+                                break
+
+                            if choice_number < 1 or choice_number > len(conflicts):
+                                print("Invalid choice. I will not delete anything.")
+                                break
+
+                            conflict_event = conflicts[choice_number - 1]
+
+                        title = conflict_event.get("summary", "No Title")
+                        start = conflict_event["start"].get("dateTime", conflict_event["start"].get("date"))
+
+                    
+                        #keep as again  if user dont type "yes" or :"no" but .. only ask 3 times otherwise loop will not break
+                        confirmation_done = False
+                        confirm_attempts = 0
+
+                        while confirm_attempts < 3:
+                            confirm = input(
+                                f"Are you sure you want to delete '{title}' at {start}? Type yes or no: "
+                            )
+
+                            confirm = confirm.lower().strip()
+
+                            if confirm == "yes":
+                                delete_event_by_id(conflict_event["id"])
+                                print("\nConflicting event deleted.")
+
+                                created_event = create_event_from_info(result)
+                                print("\nNew event created successfully.")
+                                print(created_event.get("htmlLink"))
+
+                                confirmation_done = True
+                                break
+
+                            elif confirm == "no":
+                                print("\nDelete cancelled. I will not create the new event.")
+
+                                confirmation_done = True
+                                break
+
+                            else:
+                                print("Please type exactly yes or no.")
+                                confirm_attempts = confirm_attempts + 1
+
+                        if confirmation_done == False:
+                            print("\nToo many invalid answers. Delete cancelled.")
+
+                        break
+
+
+
+
+                    result = update_scheduling_info(
+                        result,
+                        user_answer,
+                        "The requested time has a conflict. Update the event with the user's new date, time, or timezone."
+                    )
+
+                    result = fix_year_if_missing(user_answer, result)
+
+                    # if has_conflict == True:
+                    #     print_conflicts(conflicts)
+
+                    #     user_answer = input(
+                    #         "\nThis time is not available. Please enter another date/time, or type cancel: "
+                    #     )
+
+                    #     if user_answer.lower().strip() == "cancel":
+                    #         print("\nCancelled. I will not create the new event.")
+                    #         break
+
+                    #     result = update_scheduling_info(
+                    #         result,
+                    #         user_answer,
+                    #         "The requested time has a conflict. Update the event with the user's new date, time, or timezone."
+                    #     )
+
+                    #     result = fix_year_if_missing(user_answer, result)
+
+                    continue
+
+                else:
                     created_event = create_event_from_info(result)
                     print("\nEvent created successfully.")
                     print(created_event.get("htmlLink"))
-                    break
+
+                break
+
+            elif action == "delete":
+                print("\nDelete flow is not implemented yet.")
+                print("Next step: find the matching event and ask for confirmation before deleting.")
+                break
+
+            elif action == "reschedule":
+                print("\nReschedule flow is not implemented yet.")
+                print("Next step: find the existing event, check the new time for conflicts, and ask for confirmation.")
+                break
+
+            else:
+                print("\nUnsupported action type.")
+                break
 
         user_answer = input("\nYour answer: ")
 
@@ -169,5 +296,8 @@ if __name__ == "__main__":
                 am_pm_answer = input("Your answer: ")
                 user_answer = user_answer + " " + am_pm_answer
 
-        result = update_scheduling_info(result, user_answer, message)
-        result = fix_year_if_missing(user_answer, result)
+        if "timezone" in message.lower():
+            result["timezone"] = user_answer
+        else:
+            result = update_scheduling_info(result, user_answer, message)
+            result = fix_year_if_missing(user_answer, result)

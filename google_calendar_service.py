@@ -78,3 +78,15 @@ def print_conflicts(events):
         end = event["end"].get("dateTime", event["end"].get("date"))
 
         print(f"- {title}: {start} to {end}")
+
+
+# delete fucntion 
+def delete_event_by_id(event_id):
+    service = get_calendar_service()
+
+    service.events().delete(
+        calendarId="primary",
+        eventId=event_id
+    ).execute()
+
+    return True
