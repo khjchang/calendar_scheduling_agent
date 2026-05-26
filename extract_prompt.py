@@ -2,7 +2,13 @@ import os
 import json
 from dotenv import load_dotenv
 from google import genai
-from google_calendar_service import check_calendar_conflict, create_event_from_info, print_conflicts,  delete_event_by_id
+from google_calendar_service import (
+    check_calendar_conflict,
+    create_event_from_info,
+    print_conflicts,
+    get_available_slots,
+    delete_event_by_id
+)
 from validation import check_scheduling_info
 from timezone_setup import has_ambiguous_time
 from manage_date import fix_year_if_missing
@@ -104,6 +110,7 @@ Required JSON fields:
   "participants": array of strings
 }}
 """
+    
 
     response = client.models.generate_content(
         model="gemini-3-flash-preview",
@@ -123,6 +130,52 @@ Required JSON fields:
         print("Failed to parse updated LLM output.")
         print(updated_text)
         return current_info
+    
+def interpret_slot_choice(user_answer):
+    choice_prompt = f"""
+
+
+    # Convert a natural-language slot choice into 1, 2, 3, or None.
+You are interpreting which suggested calendar slot the user selected.
+
+The user was shown 3 suggested slots:
+1. First suggested slot
+2. Second suggested slot
+3. Third suggested slot
+
+User answer:
+{user_answer}
+
+Return ONLY valid JSON in this format:
+{{
+  "choice": 1 | 2 | 3 | null
+}}
+
+Rules:
+- If the user clearly chooses the first suggestion, return 1.
+- If the user clearly chooses the second suggestion, return 2.
+- If the user clearly chooses the third suggestion, return 3.
+- If the user does not choose one of the suggestions, return null.
+- Do not guess.
+"""
+
+    response = client.models.generate_content(
+        model="gemini-3-flash-preview",
+        contents=choice_prompt,
+    )
+
+    raw_text = response.text.strip()
+
+    if raw_text.startswith("```"):
+        raw_text = raw_text.replace("```json", "").replace("```", "").strip()
+
+    try:
+        result = json.loads(raw_text)
+        return result.get("choice")
+    except json.JSONDecodeError:
+        return None
+    
+
 
 if __name__ == "__main__":
     prompt = input("Enter scheduling request: ")
@@ -150,7 +203,7 @@ if __name__ == "__main__":
         if is_valid == True:
             action = result.get("action_type")
 
-            # If there is a conflict, ask whether the user wants to try another time or cancel. ###
+            # If there is a conflict, ask whether the user wants to try another time, for example if scheduled finishes at 3pm then get 3-4, 4-5. 5-6 slots
             if action == "create":
                 print("\nReady to check calendar conflicts.")
 
@@ -159,84 +212,51 @@ if __name__ == "__main__":
                 if has_conflict == True:
                     print_conflicts(conflicts)
 
+                    available_slots = get_available_slots(result)
+
+                    print("\nSuggested available time slots:")
+                    for index, slot in enumerate(available_slots):
+                        start_time = slot[0]
+                        end_time = slot[1]
+
+                        print(
+                            f"{index + 1}. {start_time.strftime('%Y-%m-%d %I:%M %p')} - {end_time.strftime('%I:%M %p')}"
+                        )
+
                     user_answer = input(
-                        "\nThis time is not available. Enter another date/time, type delete conflict, or type cancel: "
+                        "\nEnter a suggested number, another date/time, or type cancel: "
                     )
 
-                    user_answer_lower = user_answer.lower().strip()
-
-                    # cancel event that I try to create
-                    if user_answer_lower == "cancel":
+                    if user_answer.lower().strip() == "cancel":
                         print("\nCancelled. I will not create the new event.")
                         break
 
-                    if "delete" in user_answer_lower:
-                        if len(conflicts) == 1:
-                            conflict_event = conflicts[0]
-                        else:
-                            print("\nMultiple conflicting events found:")
-                            for index, event in enumerate(conflicts):
-                                title = event.get("summary", "No Title")
-                                start = event["start"].get("dateTime", event["start"].get("date"))
-                                print(f"{index + 1}. {title} at {start}")
+                  # Ask the LLM to map a natural-language slot choice to 1, 2, 3, or None.
+                  # Ask the LLM to map a natural-language slot choice to 1, 2, 3, or None.
+                  # Ask the LLM to map a natural-language slot choice to 1, 2, 3, or None.
+                    choice_number = None
 
-                            choice = input("Which conflicting event should I delete? Enter the number: ")
+                    if user_answer.isdigit():
+                        choice_number = int(user_answer)
+                    else:
+                        choice_number = interpret_slot_choice(user_answer)
 
-                            try:
-                                choice_number = int(choice)
-                            except ValueError:
-                                print("Invalid choice. I will not delete anything.")
-                                break
+                    if choice_number is not None:
+                        if choice_number >= 1 and choice_number <= len(available_slots):
+                            selected_slot = available_slots[choice_number - 1]
+                            selected_start = selected_slot[0]
 
-                            if choice_number < 1 or choice_number > len(conflicts):
-                                print("Invalid choice. I will not delete anything.")
-                                break
+                            result["date"] = selected_start.strftime("%Y-%m-%d")
+                            result["time"] = selected_start.strftime("%H:%M")
 
-                            conflict_event = conflicts[choice_number - 1]
-
-                        title = conflict_event.get("summary", "No Title")
-                        start = conflict_event["start"].get("dateTime", conflict_event["start"].get("date"))
-
-                    
-                        #keep as again  if user dont type "yes" or :"no" but .. only ask 3 times otherwise loop will not break
-                        confirmation_done = False
-                        confirm_attempts = 0
-
-                        while confirm_attempts < 3:
-                            confirm = input(
-                                f"Are you sure you want to delete '{title}' at {start}? Type yes or no: "
+                            print(
+                                f"\nSelected slot: {selected_start.strftime('%Y-%m-%d %I:%M %p')}"
                             )
 
-                            confirm = confirm.lower().strip()
-
-                            if confirm == "yes":
-                                delete_event_by_id(conflict_event["id"])
-                                print("\nConflicting event deleted.")
-
-                                created_event = create_event_from_info(result)
-                                print("\nNew event created successfully.")
-                                print(created_event.get("htmlLink"))
-
-                                confirmation_done = True
-                                break
-
-                            elif confirm == "no":
-                                print("\nDelete cancelled. I will not create the new event.")
-
-                                confirmation_done = True
-                                break
-
-                            else:
-                                print("Please type exactly yes or no.")
-                                confirm_attempts = confirm_attempts + 1
-
-                        if confirmation_done == False:
-                            print("\nToo many invalid answers. Delete cancelled.")
-
-                        break
-
-
-
+                            continue
+                        else:
+                            print("\nInvalid slot number.")
+                            continue
 
                     result = update_scheduling_info(
                         result,
@@ -245,25 +265,6 @@ if __name__ == "__main__":
                     )
 
                     result = fix_year_if_missing(user_answer, result)
-
-                    # if has_conflict == True:
-                    #     print_conflicts(conflicts)
-
-                    #     user_answer = input(
-                    #         "\nThis time is not available. Please enter another date/time, or type cancel: "
-                    #     )
-
-                    #     if user_answer.lower().strip() == "cancel":
-                    #         print("\nCancelled. I will not create the new event.")
-                    #         break
-
-                    #     result = update_scheduling_info(
-                    #         result,
-                    #         user_answer,
-                    #         "The requested time has a conflict. Update the event with the user's new date, time, or timezone."
-                    #     )
-
-                    #     result = fix_year_if_missing(user_answer, result)
 
                     continue
 

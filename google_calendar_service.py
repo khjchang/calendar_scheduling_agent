@@ -90,3 +90,23 @@ def delete_event_by_id(event_id):
     ).execute()
 
     return True
+
+# getting available slots for rescheduling getting suggestions for next available slots after the originally scheduled time
+
+def get_available_slots(info, number_of_slots=3):
+    start_datetime, end_datetime = build_start_end_datetime(info)
+
+    duration_minutes = info["duration_minutes"]
+
+    available_slots = []
+
+    next_start = end_datetime
+
+    for i in range(number_of_slots):
+        next_end = next_start + timedelta(minutes=duration_minutes)
+
+        available_slots.append((next_start, next_end))
+
+        next_start = next_end
+
+    return available_slots
