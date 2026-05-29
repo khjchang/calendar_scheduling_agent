@@ -59,17 +59,20 @@ Rules:
 # It decides whether the user wants to cancel, choose a suggested slot, or provide another time.
 
 def interpret_conflict_response(user_answer):
+    # Use the LLM to understand what the user wants after a conflict.
+    # Possible intents: cancel, choose a slot, provide a new time, or ask for more options.
+
     conflict_prompt = f"""
 You are interpreting the user's response after a calendar scheduling conflict.
 
-The user was shown suggested available slots and asked to choose a slot, give another time, or cancel.
+The user was shown suggested available slots and asked to choose a slot, give another time, ask for more options, or cancel.
 
 User answer:
 {user_answer}
 
 Return ONLY valid JSON in this format:
 {{
-  "intent": "cancel | choose_slot | provide_new_time | unclear",
+  "intent": "cancel | choose_slot | provide_new_time | request_more_options | unclear",
   "choice": 1 or 2 or 3 or null
 }}
 
@@ -80,6 +83,7 @@ Rules:
 - If the user chooses the second suggestion, choice should be 2.
 - If the user chooses the third suggestion, choice should be 3.
 - If the user provides a different date or time, intent should be "provide_new_time".
+- If the user rejects the suggested slots or asks for different/more options, intent should be "request_more_options".
 - If unclear, intent should be "unclear" and choice should be null.
 - Do not guess.
 """
@@ -275,6 +279,55 @@ def handle_conflict(result, conflicts):
 
         print("\nInvalid slot number.")
         return result, False
+    
+        if intent == "cancel":
+        print("\nCancelled. I will not create the new event.")
+        return result, True
+
+    if intent == "choose_slot":
+        if choice_number is None:
+            print("\nInvalid slot number.")
+            return result, False
+
+        try:
+            choice_number = int(choice_number)
+        except ValueError:
+            print("\nInvalid slot number.")
+            return result, False
+
+        if choice_number >= 1 and choice_number <= len(available_slots):
+            selected_slot = available_slots[choice_number - 1]
+            selected_start = selected_slot[0]
+
+            result["date"] = selected_start.strftime("%Y-%m-%d")
+            result["time"] = selected_start.strftime("%H:%M")
+
+            print(
+                f"\nSelected slot: {selected_start.strftime('%Y-%m-%d %I:%M %p')}"
+            )
+
+            return result, False
+
+        print("\nInvalid slot number.")
+        return result, False
+
+    if intent == "request_more_options":
+        # Limit repeated suggestion requests to avoid an infinite loop.
+        more_options_count = result.get("more_options_count", 0)
+
+        if more_options_count >= 5:   #show only 5 times.... 
+            print("\nI have already suggested more options 5 times.")
+            print("Please choose one of the suggested slots, provide another date/time, or say cancel.")
+            return result, False
+
+        result["more_options_count"] = more_options_count + 1
+
+        # Move to the next group of suggested slots.
+        result["slot_suggestion_offset"] = result.get("slot_suggestion_offset", 0) + len(available_slots)
+
+        print("\nOkay, I will suggest different time slots.")
+
+        return result, False
 
     if intent == "provide_new_time":
         result = update_scheduling_info(
@@ -288,9 +341,10 @@ def handle_conflict(result, conflicts):
         return result, False
 
     print("\nI could not understand your response.")
-    print("Please choose one of the suggested slots, provide another date/time, or say cancel.")
+    print("Please choose one of the suggested slots, provide another date/time, ask for more options, or say cancel.")
 
     return result, False
+
 
 
 

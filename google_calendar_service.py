@@ -94,19 +94,36 @@ def delete_event_by_id(event_id):
 # getting available slots for rescheduling getting suggestions for next available slots after the originally scheduled time
 
 def get_available_slots(info, number_of_slots=3):
+    # Suggest candidate slots within 7 days from the requested date.
+    # If the user asks for more options, skip previously shown slots.
+    # The selected slot is checked again before creating the event.
+
     start_datetime, end_datetime = build_start_end_datetime(info)
 
     duration_minutes = info["duration_minutes"]
+    slot_suggestion_offset = info.get("slot_suggestion_offset", 0)
 
-    available_slots = []
+    all_candidate_slots = []
 
-    next_start = end_datetime
+    for day_offset in range(7):
+        current_day = start_datetime + timedelta(days=day_offset)
 
-    for i in range(number_of_slots):
-        next_end = next_start + timedelta(minutes=duration_minutes)
+        # Simple candidate times for each day.
+        candidate_times = [
+            current_day.replace(hour=9, minute=0, second=0, microsecond=0),
+            current_day.replace(hour=13, minute=0, second=0, microsecond=0),
+            current_day.replace(hour=15, minute=0, second=0, microsecond=0),
+        ]
 
-        available_slots.append((next_start, next_end))
+        for candidate_start in candidate_times:
+            candidate_end = candidate_start + timedelta(minutes=duration_minutes)
 
-        next_start = next_end
+            # Do not suggest the original requested time again.
+            if candidate_start == start_datetime:
+                continue
 
-    return available_slots
+            all_candidate_slots.append((candidate_start, candidate_end))
+
+    return all_candidate_slots[
+        slot_suggestion_offset:slot_suggestion_offset + number_of_slots
+    ]
