@@ -250,6 +250,16 @@ def handle_conflict(result, conflicts):
         return result, True
 
     if intent == "choose_slot":
+        if choice_number is None:
+            print("\nInvalid slot number.")
+            return result, False
+
+        try:
+            choice_number = int(choice_number)
+        except ValueError:
+            print("\nInvalid slot number.")
+            return result, False
+
         if choice_number >= 1 and choice_number <= len(available_slots):
             selected_slot = available_slots[choice_number - 1]
             selected_start = selected_slot[0]
