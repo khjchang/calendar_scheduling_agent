@@ -280,9 +280,6 @@ def handle_conflict(result, conflicts):
         print("\nInvalid slot number.")
         return result, False
     
-        if intent == "cancel":
-        print("\nCancelled. I will not create the new event.")
-        return result, True
 
     if intent == "choose_slot":
         if choice_number is None:
