@@ -437,8 +437,14 @@ if __name__ == "__main__":
 
                 else:
                     created_event = create_event_from_info(result)
+
                     print("\nEvent created successfully.")
-                    print(created_event.get("htmlLink"))
+                    print(f"Title: {result.get('event_title')}")
+                    print(f"Date: {result.get('date')}")
+                    print(f"Time: {result.get('time')}")
+                    print(f"Timezone: {result.get('timezone')}")
+                    print(f"Duration: {result.get('duration_minutes')} minutes")
+                    print(f"Calendar link: {created_event.get('htmlLink')}")
 
                 break   
 
