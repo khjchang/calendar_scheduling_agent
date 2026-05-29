@@ -436,17 +436,22 @@ if __name__ == "__main__":
                     continue
 
                 else:
-                    created_event = create_event_from_info(result)
+                    try:
+                        created_event = create_event_from_info(result)
 
-                    print("\nEvent created successfully.")
-                    print(f"Title: {result.get('event_title')}")
-                    print(f"Date: {result.get('date')}")
-                    print(f"Time: {result.get('time')}")
-                    print(f"Timezone: {result.get('timezone')}")
-                    print(f"Duration: {result.get('duration_minutes')} minutes")
-                    print(f"Calendar link: {created_event.get('htmlLink')}")
+                        print("\nEvent created successfully.")
+                        print(f"Title: {result.get('event_title')}")
+                        print(f"Date: {result.get('date')}")
+                        print(f"Time: {result.get('time')}")
+                        print(f"Timezone: {result.get('timezone')}")
+                        print(f"Duration: {result.get('duration_minutes')} minutes")
+                        print(f"Calendar link: {created_event.get('htmlLink')}")
 
-                break   
+                    except Exception as error:
+                        print("\nI could not create the event because the Calendar API request failed.")
+                        print("Please try again later.")
+                        print(f"Error details: {error}")
+                break 
 
 
             elif action == "delete":
