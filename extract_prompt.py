@@ -107,44 +107,6 @@ Rules:
         }
 
 
-# Add this function here
-def user_wants_to_cancel(user_answer):
-    cancel_prompt = f"""
-Does the user want to cancel the current scheduling request?
-
-User answer:
-{user_answer}
-
-Return ONLY valid JSON:
-{{
-  "cancel": true or false
-}}
-
-Rules:
-- If the user wants to stop, cancel, never mind, or not create the event, return true.
-- If the user is choosing another time or selecting a suggested slot, return false.
-"""
-
-    response = client.models.generate_content(
-        model="gemini-3-flash-preview",
-        contents=cancel_prompt,
-    )
-
-    raw_text = response.text.strip()
-
-    if raw_text.startswith("```"):
-        raw_text = raw_text.replace("```json", "").replace("```", "").strip()
-
-    try:
-        result = json.loads(raw_text)
-        return result.get("cancel", False)
-    except json.JSONDecodeError:
-        return False
-
-
-
-
-
 def extract_scheduling_info(user_prompt):
     response = client.models.generate_content(
         model="gemini-3-flash-preview",
@@ -241,7 +203,7 @@ def handle_conflict(result, conflicts):
         )
 
     user_answer = input(
-        "\nEnter a suggested number, another date/time, or type cancel: "
+        "\nEnter a suggested number, another date/time, ask for more options, or type cancel: "
     )
 
     conflict_response = interpret_conflict_response(user_answer)
@@ -252,33 +214,6 @@ def handle_conflict(result, conflicts):
     if intent == "cancel":
         print("\nCancelled. I will not create the new event.")
         return result, True
-
-    if intent == "choose_slot":
-        if choice_number is None:
-            print("\nInvalid slot number.")
-            return result, False
-
-        try:
-            choice_number = int(choice_number)
-        except ValueError:
-            print("\nInvalid slot number.")
-            return result, False
-
-        if choice_number >= 1 and choice_number <= len(available_slots):
-            selected_slot = available_slots[choice_number - 1]
-            selected_start = selected_slot[0]
-
-            result["date"] = selected_start.strftime("%Y-%m-%d")
-            result["time"] = selected_start.strftime("%H:%M")
-
-            print(
-                f"\nSelected slot: {selected_start.strftime('%Y-%m-%d %I:%M %p')}"
-            )
-
-            return result, False
-
-        print("\nInvalid slot number.")
-        return result, False
     
 
     if intent == "choose_slot":
@@ -345,50 +280,6 @@ def handle_conflict(result, conflicts):
 
 
 
-
-# Convert a natural-language slot choice into 1, 2, 3, or None.
-def interpret_slot_choice(user_answer):
-    choice_prompt = f"""
-You are interpreting which suggested calendar slot the user selected.
-
-The user was shown 3 suggested slots:
-1. First suggested slot
-2. Second suggested slot
-3. Third suggested slot
-
-User answer:
-{user_answer}
-
-Return ONLY valid JSON in this format:
-{{
-  "choice": 1 | 2 | 3 | null
-}}
-
-Rules:
-- If the user clearly chooses the first suggestion, return 1.
-- If the user clearly chooses the second suggestion, return 2.
-- If the user clearly chooses the third suggestion, return 3.
-- If the user does not choose one of the suggestions, return null.
-- Do not guess.
-"""
-
-
-    response = client.models.generate_content(
-        model="gemini-3-flash-preview",
-        contents=choice_prompt,
-    )
-
-    raw_text = response.text.strip()
-
-    if raw_text.startswith("```"):
-        raw_text = raw_text.replace("```json", "").replace("```", "").strip()
-
-    try:
-        result = json.loads(raw_text)
-        return result.get("choice")
-    except json.JSONDecodeError:
-        return None
-    
 
 
 if __name__ == "__main__":
