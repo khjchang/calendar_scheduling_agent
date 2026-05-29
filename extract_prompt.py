@@ -54,6 +54,93 @@ Rules:
 """
 
 
+# LLM taking care of user answer for "cancle"
+# LLM handles the user's response after a conflict.
+# It decides whether the user wants to cancel, choose a suggested slot, or provide another time.
+
+def interpret_conflict_response(user_answer):
+    conflict_prompt = f"""
+You are interpreting the user's response after a calendar scheduling conflict.
+
+The user was shown suggested available slots and asked to choose a slot, give another time, or cancel.
+
+User answer:
+{user_answer}
+
+Return ONLY valid JSON in this format:
+{{
+  "intent": "cancel | choose_slot | provide_new_time | unclear",
+  "choice": 1 or 2 or 3 or null
+}}
+
+Rules:
+- If the user wants to cancel, stop, never mind, or not create the event, intent should be "cancel".
+- If the user chooses one of the suggested slots, intent should be "choose_slot".
+- If the user chooses the first suggestion, choice should be 1.
+- If the user chooses the second suggestion, choice should be 2.
+- If the user chooses the third suggestion, choice should be 3.
+- If the user provides a different date or time, intent should be "provide_new_time".
+- If unclear, intent should be "unclear" and choice should be null.
+- Do not guess.
+"""
+
+    response = client.models.generate_content(
+        model="gemini-3-flash-preview",
+        contents=conflict_prompt,
+    )
+
+    raw_text = response.text.strip()
+
+    if raw_text.startswith("```"):
+        raw_text = raw_text.replace("```json", "").replace("```", "").strip()
+
+    try:
+        return json.loads(raw_text)
+    except json.JSONDecodeError:
+        return {
+            "intent": "unclear",
+            "choice": None
+        }
+
+
+# Add this function here
+def user_wants_to_cancel(user_answer):
+    cancel_prompt = f"""
+Does the user want to cancel the current scheduling request?
+
+User answer:
+{user_answer}
+
+Return ONLY valid JSON:
+{{
+  "cancel": true or false
+}}
+
+Rules:
+- If the user wants to stop, cancel, never mind, or not create the event, return true.
+- If the user is choosing another time or selecting a suggested slot, return false.
+"""
+
+    response = client.models.generate_content(
+        model="gemini-3-flash-preview",
+        contents=cancel_prompt,
+    )
+
+    raw_text = response.text.strip()
+
+    if raw_text.startswith("```"):
+        raw_text = raw_text.replace("```json", "").replace("```", "").strip()
+
+    try:
+        result = json.loads(raw_text)
+        return result.get("cancel", False)
+    except json.JSONDecodeError:
+        return False
+
+
+
+
+
 def extract_scheduling_info(user_prompt):
     response = client.models.generate_content(
         model="gemini-3-flash-preview",
@@ -82,6 +169,7 @@ def extract_scheduling_info(user_prompt):
 
 
 def update_scheduling_info(current_info, user_answer, question):
+
     update_prompt = f"""
 You are updating missing scheduling information.
 
@@ -130,12 +218,76 @@ Required JSON fields:
         print("Failed to parse updated LLM output.")
         print(updated_text)
         return current_info
-    
+
+
+# Handle calendar conflicts.
+# Shows suggested slots, lets the user cancel, choose a slot, or provide another time.
+def handle_conflict(result, conflicts):
+    print_conflicts(conflicts)
+
+    available_slots = get_available_slots(result)
+
+    print("\nSuggested available time slots:")
+    for index, slot in enumerate(available_slots):
+        start_time = slot[0]
+        end_time = slot[1]
+
+        print(
+            f"{index + 1}. {start_time.strftime('%Y-%m-%d %I:%M %p')} - {end_time.strftime('%I:%M %p')}"
+        )
+
+    user_answer = input(
+        "\nEnter a suggested number, another date/time, or type cancel: "
+    )
+
+    conflict_response = interpret_conflict_response(user_answer)
+
+    intent = conflict_response.get("intent")
+    choice_number = conflict_response.get("choice")
+
+    if intent == "cancel":
+        print("\nCancelled. I will not create the new event.")
+        return result, True
+
+    if intent == "choose_slot":
+        if choice_number >= 1 and choice_number <= len(available_slots):
+            selected_slot = available_slots[choice_number - 1]
+            selected_start = selected_slot[0]
+
+            result["date"] = selected_start.strftime("%Y-%m-%d")
+            result["time"] = selected_start.strftime("%H:%M")
+
+            print(
+                f"\nSelected slot: {selected_start.strftime('%Y-%m-%d %I:%M %p')}"
+            )
+
+            return result, False
+
+        print("\nInvalid slot number.")
+        return result, False
+
+    if intent == "provide_new_time":
+        result = update_scheduling_info(
+            result,
+            user_answer,
+            "The requested time has a conflict. Update the event with the user's new date, time, or timezone."
+        )
+
+        result = fix_year_if_missing(user_answer, result)
+
+        return result, False
+
+    print("\nI could not understand your response.")
+    print("Please choose one of the suggested slots, provide another date/time, or say cancel.")
+
+    return result, False
+
+
+
+
+# Convert a natural-language slot choice into 1, 2, 3, or None.
 def interpret_slot_choice(user_answer):
     choice_prompt = f"""
-
-
-    # Convert a natural-language slot choice into 1, 2, 3, or None.
 You are interpreting which suggested calendar slot the user selected.
 
 The user was shown 3 suggested slots:
@@ -158,6 +310,7 @@ Rules:
 - If the user does not choose one of the suggestions, return null.
 - Do not guess.
 """
+
 
     response = client.models.generate_content(
         model="gemini-3-flash-preview",
@@ -210,61 +363,11 @@ if __name__ == "__main__":
                 has_conflict, conflicts = check_calendar_conflict(result)
 
                 if has_conflict == True:
-                    print_conflicts(conflicts)
+                    # deal with the conflict 
+                    result, should_break = handle_conflict(result, conflicts)
 
-                    available_slots = get_available_slots(result)
-
-                    print("\nSuggested available time slots:")
-                    for index, slot in enumerate(available_slots):
-                        start_time = slot[0]
-                        end_time = slot[1]
-
-                        print(
-                            f"{index + 1}. {start_time.strftime('%Y-%m-%d %I:%M %p')} - {end_time.strftime('%I:%M %p')}"
-                        )
-
-                    user_answer = input(
-                        "\nEnter a suggested number, another date/time, or type cancel: "
-                    )
-
-                    if user_answer.lower().strip() == "cancel":
-                        print("\nCancelled. I will not create the new event.")
+                    if should_break:
                         break
-
-                  # Ask the LLM to map a natural-language slot choice to 1, 2, 3, or None.
-                  # Ask the LLM to map a natural-language slot choice to 1, 2, 3, or None.
-                  # Ask the LLM to map a natural-language slot choice to 1, 2, 3, or None.
-                    choice_number = None
-
-                    if user_answer.isdigit():
-                        choice_number = int(user_answer)
-                    else:
-                        choice_number = interpret_slot_choice(user_answer)
-
-                    if choice_number is not None:
-                        if choice_number >= 1 and choice_number <= len(available_slots):
-                            selected_slot = available_slots[choice_number - 1]
-                            selected_start = selected_slot[0]
-
-                            result["date"] = selected_start.strftime("%Y-%m-%d")
-                            result["time"] = selected_start.strftime("%H:%M")
-
-                            print(
-                                f"\nSelected slot: {selected_start.strftime('%Y-%m-%d %I:%M %p')}"
-                            )
-
-                            continue
-                        else:
-                            print("\nInvalid slot number.")
-                            continue
-
-                    result = update_scheduling_info(
-                        result,
-                        user_answer,
-                        "The requested time has a conflict. Update the event with the user's new date, time, or timezone."
-                    )
-
-                    result = fix_year_if_missing(user_answer, result)
 
                     continue
 
@@ -273,7 +376,8 @@ if __name__ == "__main__":
                     print("\nEvent created successfully.")
                     print(created_event.get("htmlLink"))
 
-                break
+                break   
+
 
             elif action == "delete":
                 print("\nDelete flow is not implemented yet.")
