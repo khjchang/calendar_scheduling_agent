@@ -7,8 +7,9 @@ from google_calendar_service import (
     create_event_from_info,
     print_conflicts,
     get_available_slots,
-    delete_event_by_id,
-    find_matching_events
+    update_event_by_id,
+    find_matching_events,
+    update_event_by_id
 )
 from validation import check_scheduling_info
 from timezone_setup import has_ambiguous_time
@@ -154,7 +155,7 @@ def format_event_time(event_time_text, timezone):
 
     return local_time.strftime("%I:%M %p %Z")
 
-def interpret_delete_choice(user_answer, events, timezone):
+def interpret_event_choice(user_answer, events, timezone):
     # Use the LLM to understand which listed event the user wants to delete.
     # The LLM sees the numbered event list and maps the user's answer to a choice.
 
@@ -354,7 +355,151 @@ def handle_conflict(result, conflicts):
 
     return result, False
 
+def print_event_list(events, result):
+    # Print calendar events in a readable numbered list.
 
+    print(f"\nI found these event(s) on {result.get('date')} ({result.get('timezone')}):")
+
+    for index, event in enumerate(events):
+        title = event.get("summary", "No Title")
+
+        start_raw = event["start"].get("dateTime", event["start"].get("date"))
+        end_raw = event["end"].get("dateTime", event["end"].get("date"))
+
+        start = format_event_time(start_raw, result["timezone"])
+        end = format_event_time(end_raw, result["timezone"])
+
+        print(f"{index + 1}. {title}")
+        print(f"   Time: {start} - {end}")
+
+def choose_event_from_list(events, timezone, action_word):
+    # Let the user choose one event from a displayed event list.
+    # Uses LLM for natural-language selection.
+    # action_word examples: "delete", "reschedule"
+
+    selected_event = None
+    attempt_count = 0
+    max_attempts = 3
+
+    while selected_event is None and attempt_count < max_attempts:
+        choice = input(
+            f"\nWhich event should I {action_word}? You can enter a number, answer naturally, or type cancel: "
+        )
+
+        if choice.lower().strip() == "cancel":
+            print(f"\n{action_word.capitalize()} cancelled.")
+            break
+
+        attempt_count = attempt_count + 1
+
+        if choice.strip().isdigit():
+            choice_number = int(choice.strip())
+        else:
+            choice_number = interpret_event_choice(
+                choice,
+                events,
+                timezone
+            )
+
+        if choice_number is None:
+            print(f"\nI could not understand which event you want to {action_word}.")
+            print("Please choose one of the listed events, or type cancel.")
+            continue
+
+        try:
+            choice_number = int(choice_number)
+        except ValueError:
+            print("\nInvalid choice.")
+            print("Please choose one of the listed events, or type cancel.")
+            continue
+
+        if choice_number < 1 or choice_number > len(events):
+            print(f"\nInvalid choice. I found only {len(events)} event(s).")
+            print(f"Please choose a number between 1 and {len(events)}, or type cancel.")
+            continue
+
+        selected_event = events[choice_number - 1]
+
+    if selected_event is None:
+        if attempt_count >= max_attempts:
+            print("\nNumber of response attempts exceeded.")
+            print(f"{action_word.capitalize()} cancelled.")
+
+    return selected_event
+
+
+
+
+
+def get_new_reschedule_info(event_to_reschedule, result):
+    # Ask the user for the new date/time and use the LLM to parse it.
+
+    old_title = event_to_reschedule.get("summary", "No Title")
+
+    new_time_answer = input(
+        f"\nWhat new date and time should I move '{old_title}' to? "
+    )
+
+    new_info = {
+        "action_type": "create",
+        "event_title": old_title,
+        "date": None,
+        "time": None,
+        "timezone": result["timezone"],
+        "duration_minutes": result.get("duration_minutes", 30),
+        "participants": []
+    }
+
+    new_info = update_scheduling_info(
+        new_info,
+        new_time_answer,
+        "The user is providing the new date, time, and timezone for rescheduling this event."
+    )
+
+    new_info = fix_year_if_missing(new_time_answer, new_info)
+
+    check_result = check_scheduling_info(new_info)
+
+    if check_result[0] == False:
+        print("\nI do not have enough information for the new event time.")
+        print(check_result[1])
+        return None
+
+    return new_info
+
+
+def confirm_and_update_reschedule(event_to_reschedule, new_info, result):
+    # Ask for final confirmation and update the calendar event.
+
+    old_title = event_to_reschedule.get("summary", "No Title")
+    old_start_raw = event_to_reschedule["start"].get("dateTime", event_to_reschedule["start"].get("date"))
+    old_start = format_event_time(old_start_raw, result["timezone"])
+
+    confirm = input(
+        f"\nAre you sure you want to reschedule '{old_title}' from {old_start} to {new_info.get('date')} at {new_info.get('time')} ({new_info.get('timezone')})? Type exactly yes or no: "
+    )
+
+    if confirm.lower().strip() == "yes":
+        try:
+            updated_event = update_event_by_id(
+                event_to_reschedule["id"],
+                new_info
+            )
+
+            print("\nEvent rescheduled successfully.")
+            print(f"Title: {new_info.get('event_title')}")
+            print(f"New date: {new_info.get('date')}")
+            print(f"New time: {new_info.get('time')}")
+            print(f"Timezone: {new_info.get('timezone')}")
+            print(f"Calendar link: {updated_event.get('htmlLink')}")
+
+        except Exception as error:
+            print("\nI could not reschedule the event because the Calendar API request failed.")
+            print("Please try again later.")
+            print(f"Error details: {error}")
+
+    elif confirm.lower().strip() == "no":
+        print("\nReschedule cancelled.")
 
 
 if __name__ == "__main__":
@@ -457,7 +602,7 @@ if __name__ == "__main__":
                     if choice.strip().isdigit():
                         choice_number = int(choice.strip())
                     else:
-                        choice_number = interpret_delete_choice(
+                        choice_number = interpret_event_choice(
                             choice,
                             matching_events,
                             result["timezone"]
@@ -516,8 +661,38 @@ if __name__ == "__main__":
                 break
 
             elif action == "reschedule":
-                print("\nReschedule flow is not implemented yet.")
-                print("Next step: find the existing event, check the new time for conflicts, and ask for confirmation.")
+                matching_events = find_matching_events(result)
+
+                if len(matching_events) == 0:
+                    print("\nI could not find any events on that date.")
+                    break
+
+                print_event_list(matching_events, result)
+
+                event_to_reschedule = choose_event_from_list(
+                    matching_events,
+                    result["timezone"],
+                    "reschedule"
+                )
+
+                if event_to_reschedule is None:
+                    break
+
+                new_info = get_new_reschedule_info(event_to_reschedule, result)
+
+                if new_info is None:
+                    break
+
+                has_conflict, conflicts = check_calendar_conflict(new_info)
+
+                if has_conflict:
+                    print("\nThe new time has a conflict.")
+                    print_conflicts(conflicts)
+                    print("Reschedule cancelled. Please try another time.")
+                    break
+
+                confirm_and_update_reschedule(event_to_reschedule, new_info, result)
+
                 break
 
             else:

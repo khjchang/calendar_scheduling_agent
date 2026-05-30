@@ -165,13 +165,30 @@ def find_matching_events(info):
     return matching_events
 
 
-def delete_event_by_id(event_id):
-    # Delete a calendar event by Google Calendar event ID.
+def update_event_by_id(event_id, info):
+    # Update an existing calendar event by Google Calendar event ID.
     service = get_calendar_service()
 
-    service.events().delete(
+    timezone = info["timezone"]
+    start_datetime, end_datetime = build_start_end_datetime(info)
+
+    event_body = {
+        "summary": info["event_title"],
+        "description": "Rescheduled by Calendar Scheduling Agent.",
+        "start": {
+            "dateTime": start_datetime.isoformat(),
+            "timeZone": timezone,
+        },
+        "end": {
+            "dateTime": end_datetime.isoformat(),
+            "timeZone": timezone,
+        },
+    }
+
+    updated_event = service.events().update(
         calendarId="primary",
-        eventId=event_id
+        eventId=event_id,
+        body=event_body
     ).execute()
 
-    return True
+    return updated_event
