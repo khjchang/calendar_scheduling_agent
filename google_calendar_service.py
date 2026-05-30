@@ -1,9 +1,7 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from quickstart import get_calendar_service
-from datetime import datetime, timedelta
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
+
 
 def build_start_end_datetime(info):
     date = info["date"]
@@ -82,19 +80,6 @@ def print_conflicts(events):
         print(f"- {title}: {start} to {end}")
 
 
-# delete fucntion 
-def delete_event_by_id(event_id):
-    service = get_calendar_service()
-
-    service.events().delete(
-        calendarId="primary",
-        eventId=event_id
-    ).execute()
-
-    return True
-
-# getting available slots for rescheduling getting suggestions for next available slots after the originally scheduled time
-
 def get_available_slots(info, number_of_slots=3):
     # Suggest candidate slots within 7 days from the requested date.
     # If the user asks for more options, skip previously shown slots.
@@ -131,17 +116,18 @@ def get_available_slots(info, number_of_slots=3):
     ]
 
 
-
-
 def find_matching_events(info):
-    # Find calendar events that match the requested title and date.
+    # Find calendar events on a date.
+    # If event_title exists, return only matching events.
+    # If event_title is missing, return all events on that date.
+
     service = get_calendar_service()
 
     event_title = info.get("event_title")
     date = info.get("date")
     timezone = info.get("timezone")
 
-    if not event_title or not date or not timezone:
+    if not date or not timezone:
         return []
 
     timezone_object = ZoneInfo(timezone)
@@ -163,6 +149,11 @@ def find_matching_events(info):
 
     events = events_result.get("items", [])
 
+    # If the user did not give a specific title,
+    # return all events on that date.
+    if not event_title:
+        return events
+
     matching_events = []
 
     for event in events:
@@ -182,3 +173,5 @@ def delete_event_by_id(event_id):
         calendarId="primary",
         eventId=event_id
     ).execute()
+
+    return True

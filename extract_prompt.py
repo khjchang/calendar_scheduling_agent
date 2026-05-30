@@ -13,6 +13,8 @@ from google_calendar_service import (
 from validation import check_scheduling_info
 from timezone_setup import has_ambiguous_time
 from manage_date import fix_year_if_missing
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 load_dotenv()
 
@@ -134,6 +136,80 @@ def extract_scheduling_info(user_prompt):
             "raw_output": raw_text,
         }
 
+
+# chage the even formate
+def format_event_time(event_time_text, timezone):
+    # Convert Google Calendar time text into readable local time.
+    if not event_time_text:
+        return "Unknown time"
+
+    # All-day events may only have a date, not a full dateTime.
+    if "T" not in event_time_text:
+        return event_time_text
+
+    event_time_text = event_time_text.replace("Z", "+00:00")
+
+    event_time = datetime.fromisoformat(event_time_text)
+    local_time = event_time.astimezone(ZoneInfo(timezone))
+
+    return local_time.strftime("%I:%M %p %Z")
+
+def interpret_delete_choice(user_answer, events, timezone):
+    # Use the LLM to understand which listed event the user wants to delete.
+    # The LLM sees the numbered event list and maps the user's answer to a choice.
+
+    event_list_text = ""
+
+    for index, event in enumerate(events):
+        title = event.get("summary", "No Title")
+
+        start_raw = event["start"].get("dateTime", event["start"].get("date"))
+        end_raw = event["end"].get("dateTime", event["end"].get("date"))
+
+        start = format_event_time(start_raw, timezone)
+        end = format_event_time(end_raw, timezone)
+
+        event_list_text += f"{index + 1}. {title}: {start} - {end}\n"
+
+    delete_choice_prompt = f"""
+You are interpreting which calendar event the user selected for deletion.
+
+The user was shown this numbered list of events:
+{event_list_text}
+
+User answer:
+{user_answer}
+
+Return ONLY valid JSON in this format:
+{{
+  "choice": integer or null
+}}
+
+Rules:
+- If the user clearly chooses one of the listed event numbers, return that number.
+- If the user refers to an event by title, return the matching event number.
+- If the user says "first", return 1.
+- If the user says "second", return 2.
+- If the user says "third", return 3.
+- If the user does not clearly choose one event, return null.
+- Do not guess.
+"""
+
+    response = client.models.generate_content(
+        model="gemini-3-flash-preview",
+        contents=delete_choice_prompt,
+    )
+
+    raw_text = response.text.strip()
+
+    if raw_text.startswith("```"):
+        raw_text = raw_text.replace("```json", "").replace("```", "").strip()
+
+    try:
+        result = json.loads(raw_text)
+        return result.get("choice")
+    except json.JSONDecodeError:
+        return None
 
 def update_scheduling_info(current_info, user_answer, question):
 
@@ -281,8 +357,6 @@ def handle_conflict(result, conflicts):
 
 
 
-
-
 if __name__ == "__main__":
     prompt = input("Enter scheduling request: ")
 
@@ -344,55 +418,102 @@ if __name__ == "__main__":
 
 
             elif action == "delete":
-                    matching_events = find_matching_events(result)
+                matching_events = find_matching_events(result)
 
-                    if len(matching_events) == 0:
-                        print("\nI could not find a matching event to delete.")
-                        break
+                if len(matching_events) == 0:
+                    print("\nI could not find any events on that date.")
+                    break
 
-                    if len(matching_events) == 1:
-                        event_to_delete = matching_events[0]
-                    else:
-                        print("\nMultiple matching events found:")
+                print(f"\nI found these event(s) on {result.get('date')} ({result.get('timezone')}):")
 
-                        for index, event in enumerate(matching_events):
-                            title = event.get("summary", "No Title")
-                            start = event["start"].get("dateTime", event["start"].get("date"))
-                            print(f"{index + 1}. {title} at {start}")g
+                for index, event in enumerate(matching_events):
+                    title = event.get("summary", "No Title")
 
-                        choice = input("\nWhich event should I delete? Enter the number: ")
+                    start_raw = event["start"].get("dateTime", event["start"].get("date"))
+                    end_raw = event["end"].get("dateTime", event["end"].get("date"))
 
-                        try:
-                            choice_number = int(choice)
-                        except ValueError:
-                            print("\nInvalid choice. Delete cancelled.")
-                            break
+                    start = format_event_time(start_raw, result["timezone"])
+                    end = format_event_time(end_raw, result["timezone"])
 
-                        if choice_number < 1 or choice_number > len(matching_events):
-                            print("\nInvalid choice. Delete cancelled.")
-                            break
+                    print(f"{index + 1}. {title}")
+                    print(f"   Time: {start} - {end}")
 
-                        event_to_delete = matching_events[choice_number - 1]
 
-                    title = event_to_delete.get("summary", "No Title")
-                    start = event_to_delete["start"].get("dateTime", event_to_delete["start"].get("date"))
+                event_to_delete = None
+                attempt_count = 0
+                max_attempts = 3
 
-                    confirm = input(
-                        f"\nAre you sure you want to delete '{title}' at {start}? Type yes or no: "
+                while event_to_delete is None and attempt_count < max_attempts:
+                    choice = input(
+                        "\nWhich event should I delete? You can enter a number, answer naturally, or type cancel: "
                     )
 
-                    if confirm.lower().strip() == "yes":
-                        try:
-                            delete_event_by_id(event_to_delete["id"])
-                            print("\nEvent deleted successfully.")
-                        except Exception as error:
-                            print("\nI could not delete the event because the Calendar API request failed.")
-                            print("Please try again later.")
-                            print(f"Error details: {error}")
-                    else:
+                    if choice.lower().strip() == "cancel":
                         print("\nDelete cancelled.")
+                        break
 
+                    attempt_count = attempt_count + 1
+
+                    if choice.strip().isdigit():
+                        choice_number = int(choice.strip())
+                    else:
+                        choice_number = interpret_delete_choice(
+                            choice,
+                            matching_events,
+                            result["timezone"]
+                        )
+
+                    if choice_number is None:
+                        print("\nI could not understand which event you want to delete.")
+                        print("Please choose one of the listed events, or type cancel.")
+                        continue
+
+                    try:
+                        choice_number = int(choice_number)
+                    except ValueError:
+                        print("\nInvalid choice.")
+                        print("Please choose one of the listed events, or type cancel.")
+                        continue
+
+                    if choice_number < 1 or choice_number > len(matching_events):
+                        print(f"\nInvalid choice. I found only {len(matching_events)} event(s).")
+                        print(f"Please choose a number between 1 and {len(matching_events)}, or type cancel.")
+                        continue
+
+                    event_to_delete = matching_events[choice_number - 1]
+
+                if event_to_delete is None:
+                    if attempt_count >= max_attempts:
+                        print("\nNumber of response attempts exceeded.")
+                        print("Delete cancelled.")
                     break
+
+              
+
+                title = event_to_delete.get("summary", "No Title")
+                start_raw = event_to_delete["start"].get("dateTime", event_to_delete["start"].get("date"))
+                start = format_event_time(start_raw, result["timezone"])
+
+                confirm = input(
+                    f"\nAre you sure you want to delete '{title}' at {start}? Type exactly yes or no: "
+                )
+
+                if confirm.lower().strip() == "yes":
+                    try:
+                        delete_event_by_id(event_to_delete["id"])
+                        print("\nEvent deleted successfully.")
+                    except Exception as error:
+                        print("\nI could not delete the event because the Calendar API request failed.")
+                        print("Please try again later.")
+                        print(f"Error details: {error}")
+
+                elif confirm.lower().strip() == "no":
+                    print("\nDelete cancelled.")
+
+                else:
+                    print("\nInvalid confirmation. Delete cancelled.")
+
+                break
 
             elif action == "reschedule":
                 print("\nReschedule flow is not implemented yet.")
