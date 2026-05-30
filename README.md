@@ -4,7 +4,7 @@
 
 This project is a Calendar Scheduling Agent built for Project 3 in the Agent Development course.
 
-The agent helps users schedule calendar events using natural language. It uses an LLM to understand the user's request and a backend connected to Google Calendar API to check availability, detect conflicts, suggest alternative slots, and create calendar events.
+The agent helps users schedule calendar events using natural language. It uses an LLM to understand the user's request and a backend connected to Google Calendar API to check availability, detect conflicts, suggest alternative slots, create calendar events, delete calendar events, and reschedule existing events.
 
 The main design principle is:
 
@@ -13,7 +13,7 @@ LLM = understands natural language and user intent
 Backend = validates data, checks calendar availability, and performs real calendar actions
 ```
 
-The system does not allow the LLM to directly create, delete, or reschedule calendar events. Calendar actions are only performed by backend functions after validation and conflict checking.
+The system does not allow the LLM to directly create, delete, or reschedule calendar events. Calendar actions are only performed by backend functions after validation, conflict checking, and user confirmation when needed.
 
 ---
 
@@ -32,15 +32,17 @@ Current implemented features:
 * Alternative slot suggestion after conflicts
 * Natural-language conflict response handling
 * Real event creation in Google Calendar
+* Delete event flow with event search, event selection, confirmation, and deletion
+* Reschedule event flow with event search, event selection, new time parsing, conflict checking, confirmation, and event update
 
 Partially implemented or planned features:
 
-* Full delete event flow
-* Full reschedule event flow
 * Multi-participant availability checking
 * More advanced available-slot search
 * Robust DST edge case handling
 * Stronger API error handling
+* Full seed example set
+* Headroom task documentation
 
 ---
 
@@ -77,7 +79,9 @@ Responsibilities:
 * Runs validation
 * Checks calendar conflicts
 * Handles suggested slot selection
-* Creates events when safe
+* Handles delete event flow
+* Handles reschedule event flow
+* Creates, deletes, or updates events only after validation and user confirmation
 
 #### `quickstart.py`
 
@@ -98,6 +102,9 @@ Responsibilities:
 * Build start and end datetimes
 * Check calendar conflicts
 * Create calendar events
+* Delete calendar events
+* Update calendar events
+* Find matching events by date and optional title
 * Suggest available slots
 * Print conflict information
 
@@ -146,7 +153,7 @@ If that date has already passed, use next year.
 
 This project requires:
 
-* Python 3.9 or higher
+* Python 3.10 or higher recommended
 * Google Calendar API credentials
 * Gemini API key
 * A Google account with Calendar access
@@ -433,20 +440,146 @@ time = 15:00
 
 ---
 
+### Example 6: Delete an Event
+
+User input:
+
+```text
+Can I delete schedule on August 11, 2026?
+```
+
+Expected behavior:
+
+```text
+I found these event(s) on 2026-08-11 (America/Los_Angeles):
+1. basketball practice
+   Time: 01:00 PM PDT - 02:00 PM PDT
+2. study meeting
+   Time: 03:00 PM PDT - 04:00 PM PDT
+
+Which event should I delete? You can enter a number, answer naturally, or type cancel:
+```
+
+The user can select an event by number or natural language.
+
+Example user answer:
+
+```text
+delete study meeting
+```
+
+Expected behavior:
+
+```text
+Are you sure you want to delete 'study meeting' at 03:00 PM PDT? Type exactly yes or no:
+```
+
+If the user confirms:
+
+```text
+yes
+```
+
+Expected behavior:
+
+```text
+Event deleted successfully.
+```
+
+---
+
+### Example 7: Reschedule an Event
+
+User input:
+
+```text
+Reschedule study meeting on August 12, 2026
+```
+
+Expected behavior:
+
+```text
+I found these event(s) on 2026-08-12 (America/Los_Angeles):
+1. study meeting
+   Time: 03:00 PM PDT - 04:00 PM PDT
+
+Which event should I reschedule? You can enter a number, answer naturally, or type cancel:
+```
+
+The user can select an event by number or natural language.
+
+Example user answer:
+
+```text
+the first one
+```
+
+Expected behavior:
+
+```text
+What new date and time should I move 'study meeting' to?
+```
+
+Example user answer:
+
+```text
+Move it to August 13, 2026 at 2 PM PST
+```
+
+Expected behavior:
+
+```text
+Are you sure you want to reschedule 'study meeting' from 03:00 PM PDT to 2026-08-13 at 14:00 (America/Los_Angeles)? Type exactly yes or no:
+```
+
+If the user confirms:
+
+```text
+yes
+```
+
+Expected behavior:
+
+```text
+Event rescheduled successfully.
+```
+
+---
+
 ## Current Agent Flow
 
 ```text
 User request
 → Gemini extracts structured scheduling information
-→ Validation checks missing fields
+→ Validation checks missing fields based on action type
 → Timezone is normalized
 → Missing year is corrected
+→ Agent branches based on action type
+
+Create flow:
 → Google Calendar conflict check runs
 → If no conflict, create event
 → If conflict, suggest alternative slots
-→ User selects a slot, provides another time, or cancels
+→ User selects a slot, provides another time, asks for more options, or cancels
 → Selected time is checked again
 → Event is created only after conflict check passes
+
+Delete flow:
+→ Find events on the requested date
+→ Show matching events or all events on that date
+→ User selects an event by number or natural language
+→ Agent asks for confirmation
+→ Event is deleted only after confirmation
+
+Reschedule flow:
+→ Find events on the requested date
+→ Show matching events or all events on that date
+→ User selects an event by number or natural language
+→ Agent asks for the new date and time
+→ New time is parsed by Gemini
+→ New time is checked for conflicts
+→ Agent asks for confirmation
+→ Event is updated only after confirmation
 ```
 
 ---
@@ -472,6 +605,7 @@ Do not commit or submit these files:
 credentials.json
 token.json
 venv/
+.venv/
 __pycache__/
 ```
 
@@ -484,10 +618,10 @@ Recommended `.gitignore`:
 credentials.json
 token.json
 venv/
+.venv/
 __pycache__/
 *.pyc
 .DS_Store
 ```
 
 ---
-
