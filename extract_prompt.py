@@ -92,7 +92,7 @@ Rules:
 """
 
     response = client.models.generate_content(
-        model="gemini-3-flash-preview",
+        model="gemini-2.5-flash-lite",
         contents=conflict_prompt,
     )
 
@@ -112,7 +112,7 @@ Rules:
 
 def extract_scheduling_info(user_prompt):
     response = client.models.generate_content(
-        model="gemini-3-flash-preview",
+        model="gemini-2.5-flash-lite",
         contents=f"{SYSTEM_INSTRUCTION}\n\nUser prompt: {user_prompt}",
     )
 
@@ -196,7 +196,7 @@ Rules:
 """
 
     response = client.models.generate_content(
-        model="gemini-3-flash-preview",
+        model="gemini-2.5-flash-lite",
         contents=delete_choice_prompt,
     )
 
@@ -244,7 +244,7 @@ Required JSON fields:
     
 
     response = client.models.generate_content(
-        model="gemini-3-flash-preview",
+        model="gemini-2.5-flash-lite",
         contents=update_prompt,
     )
 
