@@ -34,10 +34,23 @@ def check_scheduling_info(info):
         return True, "Scheduling information is complete."
 
     if action == "delete":
-        if not info.get("event_title") and not info.get("date"):
+        if not info.get("event_title"):
             return False, "Which event do you want to delete?"
 
-        return True, "I need to find the matching event first and ask for your confirmation before deleting it."
+        if not info.get("date"):
+            return False, "What date is the event on?"
+
+        if not info.get("timezone"):
+            return False, "Which timezone should I use to search for this event?"
+
+        normalized_timezone = normalize_timezone(info.get("timezone"))
+
+        if not normalized_timezone:
+            return False, f"I do not support the timezone '{info.get('timezone')}'. Please use a supported timezone."
+
+        info["timezone"] = normalized_timezone
+
+        return True, "Ready to find the matching event before deleting."
 
     if action == "reschedule":
         if not info.get("event_title"):

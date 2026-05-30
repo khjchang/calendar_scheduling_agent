@@ -2,6 +2,8 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from quickstart import get_calendar_service
 from datetime import datetime, timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 def build_start_end_datetime(info):
     date = info["date"]
@@ -127,3 +129,56 @@ def get_available_slots(info, number_of_slots=3):
     return all_candidate_slots[
         slot_suggestion_offset:slot_suggestion_offset + number_of_slots
     ]
+
+
+
+
+def find_matching_events(info):
+    # Find calendar events that match the requested title and date.
+    service = get_calendar_service()
+
+    event_title = info.get("event_title")
+    date = info.get("date")
+    timezone = info.get("timezone")
+
+    if not event_title or not date or not timezone:
+        return []
+
+    timezone_object = ZoneInfo(timezone)
+
+    day_start = datetime.fromisoformat(date + "T00:00")
+    day_start = day_start.replace(tzinfo=timezone_object)
+
+    day_end = datetime.fromisoformat(date + "T23:59")
+    day_end = day_end.replace(tzinfo=timezone_object)
+
+    events_result = service.events().list(
+        calendarId="primary",
+        timeMin=day_start.isoformat(),
+        timeMax=day_end.isoformat(),
+        timeZone=timezone,
+        singleEvents=True,
+        orderBy="startTime"
+    ).execute()
+
+    events = events_result.get("items", [])
+
+    matching_events = []
+
+    for event in events:
+        title = event.get("summary", "").lower()
+
+        if event_title.lower() in title:
+            matching_events.append(event)
+
+    return matching_events
+
+
+def delete_event_by_id(event_id):
+    # Delete a calendar event by Google Calendar event ID.
+    service = get_calendar_service()
+
+    service.events().delete(
+        calendarId="primary",
+        eventId=event_id
+    ).execute()
