@@ -41,6 +41,18 @@ def check_calendar_conflict(info):
 
     return False, []
 
+# Delete an existing calendar event 
+
+def delete_event_by_id(event_id):
+   
+    service = get_calendar_service()
+
+    service.events().delete(
+        calendarId="primary",
+        eventId=event_id
+    ).execute()
+
+    return True
 
 def create_event_from_info(info):
     service = get_calendar_service()
@@ -60,6 +72,16 @@ def create_event_from_info(info):
             "timeZone": timezone,
         },
     }
+
+    participants = info.get("participants", [])
+
+    if participants:
+        event["attendees"] = []
+
+        for participant in participants:
+            event["attendees"].append({
+                "email": participant
+            })
 
     created_event = service.events().insert(
         calendarId="primary",
@@ -185,6 +207,16 @@ def update_event_by_id(event_id, info):
         },
     }
 
+    participants = info.get("participants", [])
+
+    if participants:
+        event_body["attendees"] = []
+
+        for participant in participants:
+            event_body["attendees"].append({
+                "email": participant
+            })
+
     updated_event = service.events().update(
         calendarId="primary",
         eventId=event_id,
@@ -192,3 +224,5 @@ def update_event_by_id(event_id, info):
     ).execute()
 
     return updated_event
+
+

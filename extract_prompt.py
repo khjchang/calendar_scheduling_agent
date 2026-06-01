@@ -7,7 +7,7 @@ from google_calendar_service import (
     create_event_from_info,
     print_conflicts,
     get_available_slots,
-    update_event_by_id,
+    delete_event_by_id,
     find_matching_events,
     update_event_by_id
 )
@@ -55,6 +55,11 @@ Rules:
 
 10. If user does not provide AM or PM, do not assume it. 
 11. When user provide date for the reservation, but didn't provide year, use the current year. If the date has already passed for the current year, use the next year. For example, if today is 2024-06-01 and the user says "Schedule a meeting on June 5th", then the date should be 2024-06-05. But if the user says "Schedule a meeting on May 30th", then the date should be 2025-05-30.
+
+
+12. If the user mentions participant email addresses, include them in the participants array.
+13. Only include valid-looking email addresses in participants.
+14. If the user mentions a participant name without an email address, do not guess the email address.
 """
 
 
@@ -553,6 +558,11 @@ if __name__ == "__main__":
                         print(f"Time: {result.get('time')}")
                         print(f"Timezone: {result.get('timezone')}")
                         print(f"Duration: {result.get('duration_minutes')} minutes")
+
+                        participants = result.get("participants", [])
+
+                        if participants:
+                            print(f"Participants: {', '.join(participants)}")
                         print(f"Calendar link: {created_event.get('htmlLink')}")
 
                     except Exception as error:
