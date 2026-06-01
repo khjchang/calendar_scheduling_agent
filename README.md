@@ -1,193 +1,35 @@
-# Calendar Scheduling Agent
+## How to Run the Project
 
-## Overview
-
-This project is a Calendar Scheduling Agent built for Project 3 in the Agent Development course.
-
-The agent helps users schedule calendar events using natural language. It uses an LLM to understand the user's request and a backend connected to Google Calendar API to check availability, detect conflicts, suggest alternative slots, create calendar events, delete calendar events, and reschedule existing events.
-
-The main design principle is:
+This project can be run in two ways:
 
 ```text
-LLM = understands natural language and user intent
-Backend = validates data, checks calendar availability, and performs real calendar actions
+1. CLI agent mode
+2. FastAPI tool endpoint mode
 ```
 
-The system does not allow the LLM to directly create, delete, or reschedule calendar events. Calendar actions are only performed by backend functions after validation, conflict checking, and user confirmation when needed.
+The CLI mode lets a user interact with the scheduling agent through the terminal.
+
+The FastAPI mode exposes the calendar tools as HTTP endpoints for evaluation or external tool-calling.
 
 ---
 
-## Features
+## 1. Run the CLI Agent
 
-Current implemented features:
-
-* Natural-language scheduling request parsing
-* Structured JSON extraction using Gemini
-* Validation for missing event title, date, time, timezone, and duration
-* Timezone normalization
-* AM/PM ambiguity detection
-* Missing year correction
-* Google Calendar API integration
-* Conflict detection before event creation
-* Alternative slot suggestion after conflicts
-* Natural-language conflict response handling
-* Real event creation in Google Calendar
-* Delete event flow with event search, event selection, confirmation, and deletion
-* Reschedule event flow with event search, event selection, new time parsing, conflict checking, confirmation, and event update
-
-Partially implemented or planned features:
-
-* Multi-participant availability checking
-* More advanced available-slot search
-* Robust DST edge case handling
-* Stronger API error handling
-* Full seed example set
-* Headroom task documentation
-
----
-
-## Project Structure
-
-```text
-calendar-agent/
-│
-├── extract_prompt.py
-├── quickstart.py
-├── google_calendar_service.py
-├── validation.py
-├── timezone_setup.py
-├── manage_date.py
-├── requirements.txt
-├── README.md
-├── .env
-├── credentials.json
-├── token.json
-└── venv/
-```
-
-### File Descriptions
-
-#### `extract_prompt.py`
-
-Main program file.
-
-Responsibilities:
-
-* Takes the user's scheduling request
-* Calls Gemini to extract structured scheduling information
-* Handles follow-up clarification
-* Runs validation
-* Checks calendar conflicts
-* Handles suggested slot selection
-* Handles delete event flow
-* Handles reschedule event flow
-* Creates, deletes, or updates events only after validation and user confirmation
-
-#### `quickstart.py`
-
-Handles Google Calendar authentication.
-
-Responsibilities:
-
-* Runs OAuth 2.0 authentication
-* Loads and refreshes Google Calendar credentials
-* Creates the Google Calendar service object
-
-#### `google_calendar_service.py`
-
-Contains Google Calendar helper functions.
-
-Responsibilities:
-
-* Build start and end datetimes
-* Check calendar conflicts
-* Create calendar events
-* Delete calendar events
-* Update calendar events
-* Find matching events by date and optional title
-* Suggest available slots
-* Print conflict information
-
-#### `validation.py`
-
-Validates extracted scheduling information.
-
-Responsibilities:
-
-* Check missing required fields
-* Normalize timezone
-* Decide whether the request is ready for calendar execution
-
-#### `timezone_setup.py`
-
-Handles timezone logic.
-
-Responsibilities:
-
-* Convert timezone aliases to IANA timezone names
-* Detect ambiguous time inputs
-
-Examples:
-
-```text
-PST → America/Los_Angeles
-PT → America/Los_Angeles
-ET → America/New_York
-KST → Asia/Seoul
-```
-
-#### `manage_date.py`
-
-Handles dates without a year.
-
-Rule:
-
-```text
-If the user provides a month and day but no year, use the current year.
-If that date has already passed, use next year.
-```
-
----
-
-## Requirements
-
-This project requires:
-
-* Python 3.10 or higher recommended
-* Google Calendar API credentials
-* Gemini API key
-* A Google account with Calendar access
-
-Recommended Python version:
-
-```text
-Python 3.10+
-```
-
-Python 3.9 may work, but some packages may show end-of-life warnings.
-
----
-
-## Setup Instructions
-
-### 1. Clone or Download the Project
+### Step 1: Open the project folder
 
 ```bash
-git clone <your-repository-url>
 cd calendar-agent
 ```
 
-Or download the project folder manually and open it in a terminal.
+### Step 2: Create and activate a virtual environment
 
----
-
-### 2. Create a Virtual Environment
+If the virtual environment does not exist yet:
 
 ```bash
 python3 -m venv venv
 ```
 
-Activate the virtual environment:
+Activate it:
 
 #### macOS / Linux
 
@@ -201,70 +43,36 @@ source venv/bin/activate
 venv\Scripts\activate
 ```
 
----
-
-### 3. Install Dependencies
+### Step 3: Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-If `requirements.txt` is not available, install the required packages manually:
+If needed, install the main packages manually:
 
 ```bash
-pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib google-genai python-dotenv
+pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib google-genai python-dotenv fastapi uvicorn pydantic
 ```
 
----
+### Step 4: Add required credentials
 
-### 4. Set Up Google Calendar API
-
-1. Go to Google Cloud Console.
-2. Create a new project.
-3. Enable the Google Calendar API.
-4. Configure the OAuth consent screen.
-5. Create an OAuth Client ID.
-6. Choose Desktop App as the application type.
-7. Download the OAuth credentials file.
-8. Rename the downloaded file to:
+The project root should contain:
 
 ```text
+.env
 credentials.json
 ```
 
-9. Place `credentials.json` in the project root folder.
-
-The project root should look like this:
-
-```text
-calendar-agent/
-├── credentials.json
-├── quickstart.py
-├── extract_prompt.py
-└── ...
-```
-
----
-
-### 5. Set Up Gemini API Key
-
-Create a `.env` file in the project root folder.
-
-```bash
-touch .env
-```
-
-Add your Gemini API key:
+The `.env` file should contain:
 
 ```env
 GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
-Do not share this file publicly.
+The `credentials.json` file should be downloaded from Google Cloud Console after enabling the Google Calendar API.
 
----
-
-### 6. Authenticate Google Calendar
+### Step 5: Authenticate Google Calendar
 
 Run:
 
@@ -272,356 +80,263 @@ Run:
 python quickstart.py
 ```
 
-The first time you run this, a browser window will open and ask you to log in with your Google account.
+The first time this runs, a browser window will open and ask the user to log in with a Google account.
 
-After successful authentication, a `token.json` file will be created automatically.
+After authentication, a `token.json` file will be created automatically.
 
----
-
-### 7. Run the Calendar Scheduling Agent
-
-Run:
+### Step 6: Run the agent
 
 ```bash
 python extract_prompt.py
 ```
 
-Then enter a scheduling request.
-
-Example:
+Example input:
 
 ```text
-Schedule study meeting on July 21, 2026 at 3 PM PST for 1 hour
+Schedule study meeting on August 10, 2026 at 3 PM PST for 1 hour
+```
+
+The agent will extract scheduling information, check for calendar conflicts, and create/delete/reschedule events depending on the user request.
+
+---
+
+## 2. Run the FastAPI Tool Endpoint Server
+
+The FastAPI server exposes the backend calendar tools as HTTP endpoints.
+
+### Step 1: Start the server
+
+Make sure the virtual environment is activated:
+
+```bash
+source venv/bin/activate
+```
+
+Then run:
+
+```bash
+uvicorn app:app --reload
+```
+
+Expected output:
+
+```text
+Uvicorn running on http://127.0.0.1:8000
+Application startup complete.
+```
+
+The server terminal should stay open while the API is running.
+
+### Step 2: Open the API documentation
+
+Open this URL in a browser:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+This opens the FastAPI interactive documentation page.
+
+The OpenAPI schema is available at:
+
+```text
+http://127.0.0.1:8000/openapi.json
+```
+
+### Step 3: Available tool endpoint URLs
+
+Local base URL:
+
+```text
+http://127.0.0.1:8000
+```
+
+Tool endpoints:
+
+```text
+POST http://127.0.0.1:8000/check_conflict
+POST http://127.0.0.1:8000/get_available_slots
+POST http://127.0.0.1:8000/create_event
+POST http://127.0.0.1:8000/find_matching_events
+POST http://127.0.0.1:8000/delete_event
+POST http://127.0.0.1:8000/reschedule_event
 ```
 
 ---
 
-## Example Usage
+## 3. Test the FastAPI Endpoints
 
-### Example 1: Create an Event
+Open a second terminal while the server is still running.
 
-User input:
+Activate the virtual environment:
 
-```text
-Schedule study meeting on July 21, 2026 at 3 PM PST for 1 hour
+```bash
+source venv/bin/activate
 ```
 
-Expected behavior:
+### Test `create_event`
 
-```text
-Current extracted information:
+```bash
+curl -X POST "http://127.0.0.1:8000/create_event" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action_type": "create",
+    "event_title": "API test meeting",
+    "date": "2026-08-26",
+    "time": "10:00",
+    "timezone": "America/Los_Angeles",
+    "duration_minutes": 30,
+    "participants": []
+  }'
+```
+
+Expected response:
+
+```json
 {
-  "action_type": "create",
-  "event_title": "study meeting",
-  "date": "2026-07-21",
-  "time": "15:00",
-  "timezone": "America/Los_Angeles",
-  "duration_minutes": 60,
-  "participants": []
+  "created": true,
+  "event_id": "...",
+  "html_link": "...",
+  "summary": "API test meeting"
 }
+```
 
-Validation message:
-Scheduling information is complete.
+### Test `get_available_slots`
 
-Ready to check calendar conflicts.
+```bash
+curl -X POST "http://127.0.0.1:8000/get_available_slots" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action_type": "create",
+    "event_title": "slot test",
+    "date": "2026-08-26",
+    "time": "10:00",
+    "timezone": "America/Los_Angeles",
+    "duration_minutes": 30,
+    "participants": []
+  }'
+```
 
-Event created successfully.
+Expected response:
+
+```json
+{
+  "available_slots": [
+    {
+      "start": "2026-08-26T09:00:00-07:00",
+      "end": "2026-08-26T09:30:00-07:00"
+    },
+    {
+      "start": "2026-08-26T13:00:00-07:00",
+      "end": "2026-08-26T13:30:00-07:00"
+    },
+    {
+      "start": "2026-08-26T15:00:00-07:00",
+      "end": "2026-08-26T15:30:00-07:00"
+    }
+  ]
+}
+```
+
+### Test `find_matching_events`
+
+```bash
+curl -X POST "http://127.0.0.1:8000/find_matching_events" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action_type": "delete",
+    "event_title": null,
+    "date": "2026-08-26",
+    "timezone": "America/Los_Angeles",
+    "duration_minutes": 30,
+    "participants": []
+  }'
+```
+
+Expected response:
+
+```json
+{
+  "events": [
+    {
+      "id": "...",
+      "summary": "API test meeting",
+      "start": {
+        "dateTime": "...",
+        "timeZone": "America/Los_Angeles"
+      },
+      "end": {
+        "dateTime": "...",
+        "timeZone": "America/Los_Angeles"
+      },
+      "html_link": "..."
+    }
+  ]
+}
+```
+
+### Test `delete_event`
+
+Use an event ID returned from `create_event` or `find_matching_events`.
+
+```bash
+curl -X POST "http://127.0.0.1:8000/delete_event" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event_id": "PASTE_EVENT_ID_HERE"
+  }'
+```
+
+Expected response:
+
+```json
+{
+  "deleted": true,
+  "event_id": "PASTE_EVENT_ID_HERE"
+}
+```
+
+### Test `reschedule_event`
+
+Use an existing event ID.
+
+```bash
+curl -X POST "http://127.0.0.1:8000/reschedule_event" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event_id": "PASTE_EVENT_ID_HERE",
+    "event_title": "API test meeting",
+    "date": "2026-08-27",
+    "time": "14:00",
+    "timezone": "America/Los_Angeles",
+    "duration_minutes": 30,
+    "participants": []
+  }'
+```
+
+Expected response:
+
+```json
+{
+  "rescheduled": true,
+  "event_id": "...",
+  "html_link": "...",
+  "summary": "API test meeting"
+}
 ```
 
 ---
 
-### Example 2: Conflict Detection
+## 4. Notes for Evaluation
 
-If the user already has an event at the requested time, the system detects the conflict.
+The FastAPI URLs above are local endpoints. They work when the evaluator runs the project locally.
 
-User input:
+If an externally accessible URL is required, the FastAPI app must be deployed to a hosting service such as Render, Railway, or another server platform.
 
-```text
-Schedule basketball practice on July 21, 2026 at 3 PM PST for 1 hour
-```
-
-Expected behavior:
+For local evaluation, use:
 
 ```text
-Conflict detected. You already have event(s) at this time:
-- study meeting: 2026-07-21T15:00:00-07:00 to 2026-07-21T16:00:00-07:00
-
-Suggested available time slots:
-1. 2026-07-21 04:00 PM - 05:00 PM
-2. 2026-07-21 05:00 PM - 06:00 PM
-3. 2026-07-21 06:00 PM - 07:00 PM
+http://127.0.0.1:8000/docs
 ```
 
-The user can choose a suggested slot:
-
-```text
-I want to choose 3
-```
-
-Expected behavior:
-
-```text
-Selected slot: 2026-07-21 06:00 PM
-
-Event created successfully.
-```
-
----
-
-### Example 3: Cancel After Conflict
-
-User input after conflict:
-
-```text
-Actually I want to cancel this
-```
-
-Expected behavior:
-
-```text
-Cancelled. I will not create the new event.
-```
-
----
-
-### Example 4: Missing Timezone
-
-User input:
-
-```text
-Schedule office hour on July 24, 2026 at 2 PM for 30 minutes
-```
-
-Expected behavior:
-
-```text
-Which timezone should I use?
-```
-
-User answer:
-
-```text
-PST
-```
-
-Expected behavior:
-
-```text
-timezone = America/Los_Angeles
-```
-
----
-
-### Example 5: Ambiguous AM/PM
-
-User input:
-
-```text
-Schedule dentist appointment on July 25, 2026 at 3 PST for 1 hour
-```
-
-Expected behavior:
-
-```text
-Do you mean AM or PM?
-```
-
-User answer:
-
-```text
-PM
-```
-
-Expected behavior:
-
-```text
-time = 15:00
-```
-
----
-
-### Example 6: Delete an Event
-
-User input:
-
-```text
-Can I delete schedule on August 11, 2026?
-```
-
-Expected behavior:
-
-```text
-I found these event(s) on 2026-08-11 (America/Los_Angeles):
-1. basketball practice
-   Time: 01:00 PM PDT - 02:00 PM PDT
-2. study meeting
-   Time: 03:00 PM PDT - 04:00 PM PDT
-
-Which event should I delete? You can enter a number, answer naturally, or type cancel:
-```
-
-The user can select an event by number or natural language.
-
-Example user answer:
-
-```text
-delete study meeting
-```
-
-Expected behavior:
-
-```text
-Are you sure you want to delete 'study meeting' at 03:00 PM PDT? Type exactly yes or no:
-```
-
-If the user confirms:
-
-```text
-yes
-```
-
-Expected behavior:
-
-```text
-Event deleted successfully.
-```
-
----
-
-### Example 7: Reschedule an Event
-
-User input:
-
-```text
-Reschedule study meeting on August 12, 2026
-```
-
-Expected behavior:
-
-```text
-I found these event(s) on 2026-08-12 (America/Los_Angeles):
-1. study meeting
-   Time: 03:00 PM PDT - 04:00 PM PDT
-
-Which event should I reschedule? You can enter a number, answer naturally, or type cancel:
-```
-
-The user can select an event by number or natural language.
-
-Example user answer:
-
-```text
-the first one
-```
-
-Expected behavior:
-
-```text
-What new date and time should I move 'study meeting' to?
-```
-
-Example user answer:
-
-```text
-Move it to August 13, 2026 at 2 PM PST
-```
-
-Expected behavior:
-
-```text
-Are you sure you want to reschedule 'study meeting' from 03:00 PM PDT to 2026-08-13 at 14:00 (America/Los_Angeles)? Type exactly yes or no:
-```
-
-If the user confirms:
-
-```text
-yes
-```
-
-Expected behavior:
-
-```text
-Event rescheduled successfully.
-```
-
----
-
-## Current Agent Flow
-
-```text
-User request
-→ Gemini extracts structured scheduling information
-→ Validation checks missing fields based on action type
-→ Timezone is normalized
-→ Missing year is corrected
-→ Agent branches based on action type
-
-Create flow:
-→ Google Calendar conflict check runs
-→ If no conflict, create event
-→ If conflict, suggest alternative slots
-→ User selects a slot, provides another time, asks for more options, or cancels
-→ Selected time is checked again
-→ Event is created only after conflict check passes
-
-Delete flow:
-→ Find events on the requested date
-→ Show matching events or all events on that date
-→ User selects an event by number or natural language
-→ Agent asks for confirmation
-→ Event is deleted only after confirmation
-
-Reschedule flow:
-→ Find events on the requested date
-→ Show matching events or all events on that date
-→ User selects an event by number or natural language
-→ Agent asks for the new date and time
-→ New time is parsed by Gemini
-→ New time is checked for conflicts
-→ Agent asks for confirmation
-→ Event is updated only after confirmation
-```
-
----
-
-## Environment Variables
-
-The project uses the following environment variable:
-
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-```
-
-This should be stored in a `.env` file.
-
----
-
-## Files Not to Commit or Submit Publicly
-
-Do not commit or submit these files:
-
-```text
-.env
-credentials.json
-token.json
-venv/
-.venv/
-__pycache__/
-```
-
-These files may contain private credentials, tokens, or local environment data.
-
-Recommended `.gitignore`:
-
-```gitignore
-.env
-credentials.json
-token.json
-venv/
-.venv/
-__pycache__/
-*.pyc
-.DS_Store
-```
-
----
+to inspect and test all available tool endpoints.
