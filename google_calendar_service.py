@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from quickstart import get_calendar_service
+import re
 
 
 def build_start_end_datetime(info):
@@ -74,11 +75,16 @@ def create_event_from_info(info):
     }
 
     participants = info.get("participants", [])
+    valid_participants = []
 
-    if participants:
+    for participant in participants:
+        if is_valid_email(participant):
+            valid_participants.append(participant)
+
+    if valid_participants:
         event["attendees"] = []
 
-        for participant in participants:
+        for participant in valid_participants:
             event["attendees"].append({
                 "email": participant
             })
@@ -226,3 +232,6 @@ def update_event_by_id(event_id, info):
     return updated_event
 
 
+def is_valid_email(text):
+    # Check if text looks like an email address.
+    return re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", text) is not None

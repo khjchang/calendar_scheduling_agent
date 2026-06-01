@@ -9,7 +9,8 @@ from google_calendar_service import (
     get_available_slots,
     delete_event_by_id,
     find_matching_events,
-    update_event_by_id
+    update_event_by_id, 
+    is_valid_email
 )
 from validation import check_scheduling_info
 from timezone_setup import has_ambiguous_time
@@ -516,6 +517,12 @@ if __name__ == "__main__":
         prompt = prompt + " " + am_pm_answer
 
     result = extract_scheduling_info(prompt)
+
+    result["participants"] = [
+        participant for participant in result.get("participants", [])
+        if is_valid_email(participant)
+    ]
+
     result = fix_year_if_missing(prompt, result)
 
     while True:
@@ -559,11 +566,16 @@ if __name__ == "__main__":
                         print(f"Timezone: {result.get('timezone')}")
                         print(f"Duration: {result.get('duration_minutes')} minutes")
 
+#check whether email is look like real email or not 
                         participants = result.get("participants", [])
+                        valid_participants = []
 
-                        if participants:
-                            print(f"Participants: {', '.join(participants)}")
-                        print(f"Calendar link: {created_event.get('htmlLink')}")
+                        for participant in participants:
+                            if is_valid_email(participant):
+                                valid_participants.append(participant)
+
+                        if valid_participants:
+                            print(f"Participants: {', '.join(valid_participants)}")
 
                     except Exception as error:
                         print("\nI could not create the event because the Calendar API request failed.")
