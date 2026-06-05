@@ -108,41 +108,71 @@ def print_conflicts(events):
         print(f"- {title}: {start} to {end}")
 
 
+def slot_has_conflict(start_datetime, end_datetime, timezone):
+    service = get_calendar_service()
+
+    events_result = service.events().list(
+        calendarId="primary",
+        timeMin=start_datetime.isoformat(),
+        timeMax=end_datetime.isoformat(),
+        timeZone=timezone,
+        singleEvents=True,
+        orderBy="startTime"
+    ).execute()
+
+    events = events_result.get("items", [])
+
+    return len(events) > 0
+
+
 def get_available_slots(info, number_of_slots=3):
-    # Suggest candidate slots within 7 days from the requested date.
-    # If the user asks for more options, skip previously shown slots.
-    # The selected slot is checked again before creating the event.
+    # Suggest available candidate slots within 7 days from the requested date.
+    # Each candidate slot is checked against the real Google Calendar before being suggested.
 
-    start_datetime, end_datetime = build_start_end_datetime(info)
+    start_datetime, _ = build_start_end_datetime(info)
 
+    timezone = info["timezone"]
     duration_minutes = info["duration_minutes"]
     slot_suggestion_offset = info.get("slot_suggestion_offset", 0)
 
-    all_candidate_slots = []
+    candidate_hours = [9, 10, 11, 13, 14, 15, 16, 17]
+
+    available_slots = []
+    valid_slot_count = 0
 
     for day_offset in range(7):
         current_day = start_datetime + timedelta(days=day_offset)
 
-        # Simple candidate times for each day.
-        candidate_times = [
-            current_day.replace(hour=9, minute=0, second=0, microsecond=0),
-            current_day.replace(hour=13, minute=0, second=0, microsecond=0),
-            current_day.replace(hour=15, minute=0, second=0, microsecond=0),
-        ]
+        for hour in candidate_hours:
+            candidate_start = current_day.replace(
+                hour=hour,
+                minute=0,
+                second=0,
+                microsecond=0
+            )
 
-        for candidate_start in candidate_times:
             candidate_end = candidate_start + timedelta(minutes=duration_minutes)
 
             # Do not suggest the original requested time again.
             if candidate_start == start_datetime:
                 continue
 
-            all_candidate_slots.append((candidate_start, candidate_end))
+            # Do not suggest occupied slots.
+            if slot_has_conflict(candidate_start, candidate_end, timezone):
+                continue
 
-    return all_candidate_slots[
-        slot_suggestion_offset:slot_suggestion_offset + number_of_slots
-    ]
+            # Skip previously shown available slots when user asks for more options.
+            if valid_slot_count < slot_suggestion_offset:
+                valid_slot_count += 1
+                continue
 
+            available_slots.append((candidate_start, candidate_end))
+            valid_slot_count += 1
+
+            if len(available_slots) >= number_of_slots:
+                return available_slots
+
+    return available_slots
 
 def find_matching_events(info):
     # Find calendar events on a date.
