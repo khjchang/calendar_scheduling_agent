@@ -11,11 +11,11 @@ def user_provided_year(user_prompt):
 
 
 def fix_year_if_missing(user_prompt, info):
-    # If LLM did not extract a date, do nothing
+    # If LLM did not extract a date, do nothing ..... 
     if not info.get("date"):
         return info
 
-    # If the user already provided a year, keep the LLM's extracted year
+
     if user_provided_year(user_prompt):
         return info
 

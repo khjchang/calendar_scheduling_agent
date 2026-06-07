@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from pydantic import BaseModel
 import re
+import json
 
 from google_calendar_service import (
     check_calendar_conflict,
@@ -362,7 +363,7 @@ def handle_valid_agent_info(session_id, info):
         if participants:
             reply += f"Participants: {', '.join(participants)}\n"
 
-        reply += f"Calendar link: {created_event.get('htmlLink')}"
+        # reply += f"Calendar link: {created_event.get('htmlLink')}"
 
         chat_sessions.pop(session_id, None)
         return {"reply": reply}
@@ -722,7 +723,7 @@ def agent_chat(request: AgentChatRequest):
                             f"New date: {new_info.get('date')}\n"
                             f"New time: {new_info.get('time')}\n"
                             f"Timezone: {new_info.get('timezone')}\n"
-                            f"Calendar link: {updated_event.get('htmlLink')}"
+                            # f"Calendar link: {updated_event.get('htmlLink')}"
                         )
                     }
 
@@ -735,7 +736,9 @@ def agent_chat(request: AgentChatRequest):
         info = extract_scheduling_info(message)
         info = clean_participants(info)
         info = fix_year_if_missing(message, info)
-
+        print("\n=== LLM EXTRACTION RESULT ===", flush=True)
+        print(json.dumps(info, indent=2, ensure_ascii=False), flush=True)
+        print("=============================\n", flush=True)
         ambiguous_time = get_ambiguous_hour_from_message(message)
 
         if ambiguous_time is not None:

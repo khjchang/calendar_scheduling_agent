@@ -490,7 +490,7 @@ def confirm_and_update_reschedule(event_to_reschedule, new_info, result):
             print(f"New date: {new_info.get('date')}")
             print(f"New time: {new_info.get('time')}")
             print(f"Timezone: {new_info.get('timezone')}")
-            print(f"Calendar link: {updated_event.get('htmlLink')}")
+            # print(f"Calendar link: {updated_event.get('htmlLink')}")
 
         except Exception as error:
             print("\nI could not reschedule the event because the Calendar API request failed.")
