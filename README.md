@@ -1,342 +1,90 @@
-## How to Run the Project
+# Calendar Scheduling Agent
 
-This project can be run in two ways:
+This project is a Calendar Scheduling Agent that uses Gemini for natural-language understanding and the Google Calendar API for real calendar operations. The backend is implemented with FastAPI, and a simple chat-style frontend is provided for demo use.
 
-```text
-1. CLI agent mode
-2. FastAPI tool endpoint mode
-```
+## Required Files
 
-The CLI mode lets a user interact with the scheduling agent through the terminal.
+Before running the project, the project root must include:
 
-The FastAPI mode exposes the calendar tools as HTTP endpoints for evaluation or external tool-calling.
-
----
-
-## 1. Run the CLI Agent
-
-### Step 1: Open the project folder
-
-```bash
-cd calendar-agent
-```
-
-### Step 2: Create and activate a virtual environment
-
-If the virtual environment does not exist yet:
-
-```bash
-python3 -m venv venv
-```
-
-Activate it:
-
-#### macOS / Linux
-
-```bash
-source venv/bin/activate
-```
-
-#### Windows
-
-```bash
-venv\Scripts\activate
-```
-
-### Step 3: Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-If needed, install the main packages manually:
-
-```bash
-pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib google-genai python-dotenv fastapi uvicorn pydantic
-```
-
-### Step 4: Add required credentials
-
-The project root should contain:
-
-```text
 .env
 credentials.json
-```
 
 The `.env` file should contain:
 
-```env
 GEMINI_API_KEY=your_gemini_api_key_here
-```
 
-The `credentials.json` file should be downloaded from Google Cloud Console after enabling the Google Calendar API.
+`credentials.json` should be downloaded from Google Cloud Console after enabling the Google Calendar API.
 
-### Step 5: Authenticate Google Calendar
+Do not include `.env`, `credentials.json`, or `token.json` in the submitted public zip.
 
-Run:
+## Setup
 
-```bash
+Create and activate a virtual environment:
+
+python3 -m venv venv
+source venv/bin/activate
+
+Install dependencies:
+
+python -m pip install -r requirements.txt
+
+Authenticate Google Calendar:
+
 python quickstart.py
-```
 
-The first time this runs, a browser window will open and ask the user to log in with a Google account.
+This will open a browser for Google login and create `token.json`.
 
-After authentication, a `token.json` file will be created automatically.
+## Run Backend
 
-### Step 6: Run the agent
+Start the FastAPI server:
 
-```bash
-python extract_prompt.py
-```
+python -m uvicorn app:app --reload
 
-Example input:
+Backend API documentation:
 
-```text
-Schedule study meeting on August 10, 2026 at 3 PM PST for 1 hour
-```
-
-The agent will extract scheduling information, check for calendar conflicts, and create/delete/reschedule events depending on the user request.
-
----
-
-## 2. Run the FastAPI Tool Endpoint Server
-
-The FastAPI server exposes the backend calendar tools as HTTP endpoints.
-
-### Step 1: Start the server
-
-Make sure the virtual environment is activated:
-
-```bash
-source venv/bin/activate
-```
-
-Then run:
-
-```bash
-uvicorn app:app --reload
-```
-
-Expected output:
-
-```text
-Uvicorn running on http://127.0.0.1:8000
-Application startup complete.
-```
-
-The server terminal should stay open while the API is running.
-
-### Step 2: Open the API documentation
-
-Open this URL in a browser:
-
-```text
 http://127.0.0.1:8000/docs
-```
 
-This opens the FastAPI interactive documentation page.
+OpenAPI schema:
 
-The OpenAPI schema is available at:
-
-```text
 http://127.0.0.1:8000/openapi.json
-```
 
-### Step 3: Available tool endpoint URLs
+## Run Frontend
 
-Local base URL:
+Open a second terminal:
 
-```text
-http://127.0.0.1:8000
-```
+cd frontend
+python3 -m http.server 3000
 
-Tool endpoints:
+Then open:
 
-```text
-POST http://127.0.0.1:8000/check_conflict
-POST http://127.0.0.1:8000/get_available_slots
-POST http://127.0.0.1:8000/create_event
-POST http://127.0.0.1:8000/find_matching_events
-POST http://127.0.0.1:8000/delete_event
-POST http://127.0.0.1:8000/reschedule_event
-```
+http://127.0.0.1:3000
 
----
+## Main API Endpoints
 
-## 3. Test the FastAPI Endpoints
+POST /check_conflict
+POST /get_available_slots
+POST /create_event
+POST /find_matching_events
+POST /delete_event
+POST /reschedule_event
+POST /agent_chat
 
-Open a second terminal while the server is still running.
+## CLI Mode
 
-Activate the virtual environment:
+The project can also be run through the terminal:
 
-```bash
-source venv/bin/activate
-```
+python extract_prompt.py
 
-### Test `create_event`
+Example request:
 
-```bash
-curl -X POST "http://127.0.0.1:8000/create_event" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "action_type": "create",
-    "event_title": "API test meeting",
-    "date": "2026-08-26",
-    "time": "10:00",
-    "timezone": "America/Los_Angeles",
-    "duration_minutes": 30,
-    "participants": []
-  }'
-```
+Schedule study meeting on August 10, 2026 at 3 PM PST for 1 hour
 
-Expected response:
+## Notes
 
-```json
-{
-  "created": true,
-  "event_id": "...",
-  "html_link": "...",
-  "summary": "API test meeting"
-}
-```
+The project uses local endpoints by default. For local evaluation, run the backend and open:
 
-### Test `get_available_slots`
-
-```bash
-curl -X POST "http://127.0.0.1:8000/get_available_slots" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "action_type": "create",
-    "event_title": "slot test",
-    "date": "2026-08-26",
-    "time": "10:00",
-    "timezone": "America/Los_Angeles",
-    "duration_minutes": 30,
-    "participants": []
-  }'
-```
-
-Expected response:
-
-```json
-{
-  "available_slots": [
-    {
-      "start": "2026-08-26T09:00:00-07:00",
-      "end": "2026-08-26T09:30:00-07:00"
-    },
-    {
-      "start": "2026-08-26T13:00:00-07:00",
-      "end": "2026-08-26T13:30:00-07:00"
-    },
-    {
-      "start": "2026-08-26T15:00:00-07:00",
-      "end": "2026-08-26T15:30:00-07:00"
-    }
-  ]
-}
-```
-
-### Test `find_matching_events`
-
-```bash
-curl -X POST "http://127.0.0.1:8000/find_matching_events" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "action_type": "delete",
-    "event_title": null,
-    "date": "2026-08-26",
-    "timezone": "America/Los_Angeles",
-    "duration_minutes": 30,
-    "participants": []
-  }'
-```
-
-Expected response:
-
-```json
-{
-  "events": [
-    {
-      "id": "...",
-      "summary": "API test meeting",
-      "start": {
-        "dateTime": "...",
-        "timeZone": "America/Los_Angeles"
-      },
-      "end": {
-        "dateTime": "...",
-        "timeZone": "America/Los_Angeles"
-      },
-      "html_link": "..."
-    }
-  ]
-}
-```
-
-### Test `delete_event`
-
-Use an event ID returned from `create_event` or `find_matching_events`.
-
-```bash
-curl -X POST "http://127.0.0.1:8000/delete_event" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "event_id": "PASTE_EVENT_ID_HERE"
-  }'
-```
-
-Expected response:
-
-```json
-{
-  "deleted": true,
-  "event_id": "PASTE_EVENT_ID_HERE"
-}
-```
-
-### Test `reschedule_event`
-
-Use an existing event ID.
-
-```bash
-curl -X POST "http://127.0.0.1:8000/reschedule_event" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "event_id": "PASTE_EVENT_ID_HERE",
-    "event_title": "API test meeting",
-    "date": "2026-08-27",
-    "time": "14:00",
-    "timezone": "America/Los_Angeles",
-    "duration_minutes": 30,
-    "participants": []
-  }'
-```
-
-Expected response:
-
-```json
-{
-  "rescheduled": true,
-  "event_id": "...",
-  "html_link": "...",
-  "summary": "API test meeting"
-}
-```
-
----
-
-## 4. Notes for Evaluation
-
-The FastAPI URLs above are local endpoints. They work when the evaluator runs the project locally.
-
-If an externally accessible URL is required, the FastAPI app must be deployed to a hosting service such as Render, Railway, or another server platform.
-
-For local evaluation, use:
-
-```text
 http://127.0.0.1:8000/docs
-```
 
-to inspect and test all available tool endpoints.
+The frontend demo runs at:
+
+http://127.0.0.1:3000

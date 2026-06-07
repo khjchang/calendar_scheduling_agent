@@ -62,6 +62,9 @@ def check_scheduling_info(info):
         if not info.get("timezone"):
             # Use the default calendar timezone for finding existing events.
             # This is safe because the user will select from a visible event list.
+            #
+            #
+            # hum ..  .need to fix to  IANA timezone... otherwize google calendar api formate will have  problem . . . . fix it toward 
             info["timezone"] = "America/Los_Angeles"
         else:
             normalized_timezone = normalize_timezone(info.get("timezone"))
