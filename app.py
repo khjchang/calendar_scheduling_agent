@@ -419,6 +419,11 @@ def agent_chat(request: AgentChatRequest):
 
     session = chat_sessions.get(session_id)
 
+
+    if session and looks_like_new_top_level_request(message):
+        chat_sessions.pop(session_id, None)
+        session = None
+
     try:
         if session:
             state = session.get("state")
@@ -825,3 +830,75 @@ def apply_ampm_to_info(info, hour, minute, ampm):
 
     info["time"] = f"{hour:02d}:{minute:02d}"
     return info
+
+#we need to reset state if user request totally different equestion during the conversation 
+def looks_like_new_top_level_request(message):
+    text = message.lower().strip()
+
+    # Follow-up answers should not reset the current flow.
+    if text in ["yes", "no", "cancel", "actually cancel this", "never mind", "stop"]:
+        return False
+
+    if text.isdigit():
+        return False
+
+    # Conflict-resolution follow-ups should not reset the current flow.
+    if text.startswith("i want to choose"):
+        return False
+
+    if text.startswith("want to choose"):
+        return False
+
+    if text.startswith("choose"):
+        return False
+
+    if text.startswith("can you show me more"):
+        return False
+
+    if text.startswith("show me more"):
+        return False
+
+    if text.startswith("more options"):
+        return False
+
+    # "Move it to..." is usually a follow-up in conflict or reschedule flows.
+    if text.startswith("move it to"):
+        return False
+
+    # New create requests.
+    if text.startswith("schedule "):
+        return True
+
+    if text.startswith("book "):
+        return True
+
+    if text.startswith("create "):
+        return True
+
+    if text.startswith("add "):
+        return True
+
+    # New reschedule requests.
+    if text.startswith("reschedule "):
+        return True
+
+    if text.startswith("change my "):
+        return True
+
+    if text.startswith("move my "):
+        return True
+
+    # New delete requests.
+    if text.startswith("can i delete"):
+        return True
+
+    if text.startswith("delete my "):
+        return True
+
+    if text.startswith("remove my "):
+        return True
+
+    if text.startswith("cancel my "):
+        return True
+
+    return False
