@@ -23,13 +23,6 @@ load_dotenv()
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 SYSTEM_INSTRUCTION = """
-You are a scheduling information extraction assistant.
-
-Your job is to extract structured scheduling information from the user's prompt.
-
-Return ONLY valid JSON.
-Do not create, delete, or reschedule calendar events.
-Do not assume a timezone if the user did not clearly provide one.
 
 Required JSON fields:
 {

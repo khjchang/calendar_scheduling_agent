@@ -4,6 +4,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from typing import List, Optional
+from pydantic import BaseModel
+from typing import List, Optional
+from pydantic import BaseModel
+import re
 
 from google_calendar_service import (
     check_calendar_conflict,
@@ -417,6 +422,36 @@ def agent_chat(request: AgentChatRequest):
     try:
         if session:
             state = session.get("state")
+            if state == "awaiting_ampm":
+                info = session["info"]
+                ambiguous_hour = session["ambiguous_hour"]
+                ambiguous_minute = session["ambiguous_minute"]
+
+                ampm = interpret_ampm_answer(message)
+
+                if ampm is None:
+                    return {
+                        "reply": "Please clarify whether you mean AM or PM."
+                    }
+
+                info = apply_ampm_to_info(
+                    info,
+                    ambiguous_hour,
+                    ambiguous_minute,
+                    ampm
+                )
+
+                check_result = check_scheduling_info(info)
+
+                if check_result[0] == False:
+                    chat_sessions[session_id] = {
+                        "state": "awaiting_clarification",
+                        "info": info,
+                        "question": check_result[1]
+                    }
+                    return {"reply": check_result[1]}
+
+                return handle_valid_agent_info(session_id, info)
 
             if state == "awaiting_clarification":
                 info = session["info"]
@@ -680,6 +715,22 @@ def agent_chat(request: AgentChatRequest):
         info = clean_participants(info)
         info = fix_year_if_missing(message, info)
 
+        ambiguous_time = get_ambiguous_hour_from_message(message)
+
+        if ambiguous_time is not None:
+            info["time"] = None
+
+            chat_sessions[session_id] = {
+                "state": "awaiting_ampm",
+                "info": info,
+                "ambiguous_hour": ambiguous_time["hour"],
+                "ambiguous_minute": ambiguous_time["minute"]
+            }
+
+            return {
+                "reply": "Do you mean AM or PM?"
+            }
+
         check_result = check_scheduling_info(info)
 
         if check_result[0] == False:
@@ -697,3 +748,64 @@ def agent_chat(request: AgentChatRequest):
         return {
             "reply": f"I ran into an error while processing the request: {error}"
         }
+    
+#make user agent recognize am or pm...........
+
+def get_ambiguous_hour_from_message(message):
+    text = message.lower()
+
+    clear_time_words = [
+        "am", "pm", "a.m.", "p.m.",
+        "morning", "afternoon", "evening", "night",
+        "noon", "midnight"
+    ]
+
+    for word in clear_time_words:
+        if word in text:
+            return None
+
+    pattern = r"\bat\s+(\d{1,2})(?::(\d{2}))?\s*(pst|pdt|pt|est|edt|et|kst|utc)?\b"
+    match = re.search(pattern, text)
+
+    if not match:
+        return None
+
+    hour = int(match.group(1))
+    minute = int(match.group(2)) if match.group(2) else 0
+
+    if 1 <= hour <= 12:
+        return {
+            "hour": hour,
+            "minute": minute
+        }
+
+    return None
+
+
+def interpret_ampm_answer(message):
+    text = message.lower().strip()
+
+    if "pm" in text or "p.m." in text or "afternoon" in text or "evening" in text or "night" in text:
+        return "PM"
+
+    if "am" in text or "a.m." in text or "morning" in text:
+        return "AM"
+
+    if "noon" in text:
+        return "PM"
+
+    if "midnight" in text:
+        return "AM"
+
+    return None
+
+
+def apply_ampm_to_info(info, hour, minute, ampm):
+    if ampm == "PM" and hour != 12:
+        hour += 12
+
+    if ampm == "AM" and hour == 12:
+        hour = 0
+
+    info["time"] = f"{hour:02d}:{minute:02d}"
+    return info
