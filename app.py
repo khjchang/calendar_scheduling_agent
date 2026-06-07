@@ -534,11 +534,27 @@ def agent_chat(request: AgentChatRequest):
                     }
 
                 if intent == "provide_new_time":
+                    original_title = info.get("event_title")
+                    original_duration = info.get("duration_minutes", 30)
+                    original_participants = info.get("participants", [])
+
                     info = update_scheduling_info(
                         info,
                         message,
-                        "The requested time has a conflict. Update the event with the user's new date, time, or timezone."
+                        "The requested time has a conflict. Update only the date, time, or timezone for the same event being created. Do not change the action_type to reschedule or delete."
                     )
+
+                    # Keep this as a create flow because this is conflict resolution for a new event.
+                    info["action_type"] = "create"
+
+                    if not info.get("event_title"):
+                        info["event_title"] = original_title
+
+                    if not info.get("duration_minutes"):
+                        info["duration_minutes"] = original_duration
+
+                    if not info.get("participants"):
+                        info["participants"] = original_participants
 
                     info = clean_participants(info)
                     info = fix_year_if_missing(message, info)
