@@ -832,6 +832,8 @@ def apply_ampm_to_info(info, hour, minute, ampm):
     return info
 
 #we need to reset state if user request totally different equestion during the conversation 
+
+# for example, After showing the delete list, if you immediately type "Reschedule..." and the agent switches to the reschedule flow instead of staying stuck in the old delete flow
 def looks_like_new_top_level_request(message):
     text = message.lower().strip()
 
